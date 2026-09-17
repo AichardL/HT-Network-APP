@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export function LoginPanel({ onLogin }: { onLogin: (u: { username: string; role: string }) => void }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('gris-admin-2024');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -20,7 +20,7 @@ export function LoginPanel({ onLogin }: { onLogin: (u: { username: string; role:
       const r = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
       });
       const d = await r.json();
       if (!r.ok) {
