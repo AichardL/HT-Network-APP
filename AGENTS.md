@@ -63,3 +63,48 @@
 
 - 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
 - Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
+
+## 本项目 GRIS：香港/新加坡茶饮网络规划系统
+
+### 项目概述
+商业级茶饮行业网络规划系统（GRIS），面向香港(HK)与新加坡(SG)市场，提供：
+商圈划定分析、门店网络项目规划、精准选址推荐、人流/客群数据查询、商业化安全与审计。
+
+### 技术栈补充
+- **底层数据库**：`better-sqlite3`（Node 原生嵌入式数据库），运行时于 `data/gris.db`
+  自动建库 + 灌入 HK/SG 种子示意数据（首次访问时生成）。`next.config.ts` 已用
+  `serverExternalPackages: ["better-sqlite3"]` 将原生模块 external 化，避免被 Next 打入构建产物。
+- **数据访问**：`src/lib/db.ts`（连接+Schema+种子）、`src/lib/repo.ts`（仓储查询）、
+  `src/lib/services.ts`（商圈/选址/规划算法）、`src/lib/api.ts`（统一 API 封装+鉴权+审计）、`src/lib/auth.ts`（Salted 登录+HMAC Cookie 会话）。
+
+### 数据库 Schema（data/gris.db，均为运行时生成，勿提交）
+markets / zones(商圈区域) / sites(候选点位) / foot_traffic(分时人流) /
+customer_zone(客群画像) / districts(商圈划定结果) / projects(项目) /
+project_sites(项目点位) / users(登录用户) / audit_log(审计)。
+
+### API（全部需 Bearer 登录 Cookie；见 src/app/api/**/route.ts）
+POST /api/auth/login、GET /api/auth/me、GET /api/market、GET /api/overview/[market]、
+GET /api/sites/[market]、GET /api/customers/[market]、GET /api/foottraffic/[id]、
+POST/GET /api/districts（商圈划定/查询）、POST /api/selection（选址）、
+POST/GET /api/planning（项目规划）、GET /api/audits（审计日志）。
+
+### 默认登录账号
+管理员：`admin` / `gris-admin-2024`（位于 src/lib/auth.ts ADMIN_PASSWORD_HASH，可改）。
+
+### 前端
+- `src/app/page.tsx` 总览；`/districts` 商圈划定；`/planning` 项目规划；`/selection` 选址；
+  `/data` 数据查询；`/audit` 审计。
+- `src/components/app-shell.tsx`（鉴权门+侧边栏）、`login.tsx`、`plan-canvas.tsx`（归一化 SVG 制图画布，无外部地图依赖）。
+- 暗色制图风格 Token 定义在 `src/app/globals.css` 的 `.dark` 块（陶瓷琥珀 #e0a458 点缀）；`design` 详见 `DESIGN.md`。
+
+### 运行与验证
+- 预览/部署入口见 `.coze [dev]/[deploy]`（scripts/build.sh 构建，start.sh 以 5000 启动 `node dist/server.js`）。
+- **只能 pnpm**；容器内临时排障可 `pnpm exec tsx -e "..."` 直接调 lib 层算法。
+- 验收只认 `test_run`：接口带鉴权，且各 curl 需**各自独立登录**（test_run 各命令并发执行，
+  共用 cookie jar 会因读写竞态产生随机 401）。正确姿势：`J=/tmp/g_$$.jar; curl login -c $J; curl -b $J <endpoint>`。
+
+### 常见问题与预防
+- 改 schema/算法后，删 `data/gris.db` 或改版本号即可触发重建+重种子；DB 文件勿提交。
+- 前端调用一律相对路径 `/api/...`，禁止硬编码域名/localhost。
+- 登录/会话依赖模块级 SECRET 常量，改 auth.ts 会使历史 Cookie 失效（属正常）。
+- 地图为 SVG 归一画布（0..100 坐标），未接第三方地图 key；如需真实底图再引入 map 服务。

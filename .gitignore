@@ -121,6 +121,8 @@ pids
 *.pid
 *.seed
 *.pid.lock
+# GRIS 本地嵌入式数据库（运行时自动生成，含种子数据，勿提交）
+data/
 # Diagnostic reports
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Cache

@@ -1,4 +1,7 @@
 [project]
+sub_id = "e97312e6"
+name = "gris-tea-network"
+entrypoint = "dist/server.js"
 requires = [ "nodejs-24" ]
 project_type = "web"
 template = "nextjs"
@@ -15,3 +18,16 @@ deps = [ "git" ]
 build = [ "bash", "./scripts/build.sh" ]
 run = [ "bash", "./scripts/start.sh" ]
 deps = [ "git" ]
+
+[deploy.profile]
+kind = "service"
+flavor = "web"
+
+[deploy.backend]
+enabled = true
+
+[preview]
+preview_enable = "enabled"
+
+[subprojects]
+path = [ "." ]

@@ -1,0 +1,152 @@
+'use client';
+
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Map,
+  Route,
+  Crosshair,
+  Database,
+  ScrollText,
+  LogOut,
+  CupSoda,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { LoginPanel } from '@/components/login';
+
+export type MarketCode = 'HK' | 'SG';
+
+interface MarketCtx {
+  market: MarketCode;
+  setMarket: (m: MarketCode) => void;
+  user: { username: string; role: string } | null;
+  logout: () => Promise<void>;
+  api: (path: string, init?: RequestInit) => Promise<Response>;
+}
+
+const Ctx = createContext<MarketCtx | null>(null);
+
+export const useMarket = () => {
+  const c = useContext(Ctx);
+  if (!c) throw new Error('useMarket must be used within AppShell');
+  return c;
+};
+
+const NAV = [
+  { href: '/', label: '总览', icon: LayoutDashboard },
+  { href: '/districts', label: '商圈划定', icon: Map },
+  { href: '/planning', label: '项目规划', icon: Route },
+  { href: '/selection', label: '精准选址', icon: Crosshair },
+  { href: '/data', label: '数据中心', icon: Database },
+  { href: '/audit', label: '审计日志', icon: ScrollText },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<{ username: string; role: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [market, setMarket] = useState<MarketCode>('HK');
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((d) => setUser(d.user || null))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const api = useCallback(async (path: string, init?: RequestInit) => {
+    return fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+    });
+  }, []);
+
+  const logout = useCallback(async () => {
+    await fetch('/api/auth/me', { method: 'POST' });
+    setUser(null);
+    router.push('/');
+  }, [router]);
+
+  const ctx: MarketCtx = { market, setMarket, user, logout, api };
+
+  return (
+    <Ctx.Provider value={ctx}>
+      {loading ? (
+        <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+          载入中…
+        </div>
+      ) : !user ? (
+        <LoginPanel onLogin={(u) => setUser(u)} />
+      ) : (
+        <div className="flex min-h-screen bg-background">
+          <aside className="flex w-60 flex-col border-r border-border bg-sidebar">
+            <div className="flex items-center gap-2.5 px-5 py-5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#e0a458] text-[#17120a]">
+                <CupSoda className="h-5 w-5" strokeWidth={1.8} />
+              </div>
+              <div className="leading-tight">
+                <div className="text-sm font-bold text-foreground">GRIS</div>
+                <div className="text-[11px] text-muted-foreground">茶饮行业网络规划系统</div>
+              </div>
+            </div>
+            <nav className="mt-2 flex-1 space-y-0.5 px-3">
+              {NAV.map((item) => {
+                const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors ${
+                      active
+                        ? 'bg-sidebar-accent text-[#e0a458]'
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent/60'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={1.8} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+            <div className="border-t border-border px-4 py-4 text-xs text-muted-foreground">
+              <div className="mb-1">GRIS · Geo Retail Intelligence</div>
+              <div className="flex items-center justify-between">
+                <span>{user.username} ({user.role})</span>
+                <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-muted-foreground" onClick={logout}>
+                  <LogOut className="h-3.5 w-3.5" /> 退出
+                </Button>
+              </div>
+            </div>
+          </aside>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="flex h-14 items-center justify-between border-b border-border px-6">
+              <div className="text-sm font-medium text-muted-foreground">
+                支持市场:{' '}
+                <span className="font-num text-foreground">{market === 'HK' ? '香港 HKD' : '新加坡 SGD'}</span>
+              </div>
+              <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+                {(['HK', 'SG'] as MarketCode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMarket(m)}
+                    className={`rounded-md px-3 py-1 text-xs transition-colors ${
+                      market === m ? 'bg-[#e0a458] text-[#17120a] font-semibold' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {m === 'HK' ? '香港' : '新加坡'}
+                  </button>
+                ))}
+              </div>
+            </header>
+            <main className="min-w-0 flex-1 overflow-auto p-6">{children}</main>
+          </div>
+        </div>
+      )}
+    </Ctx.Provider>
+  );
+}

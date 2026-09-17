@@ -135,3 +135,58 @@
 body {
   @apply font-sans;
 }
+
+/* ===== GRIS 茶饮行业网络规划 · 制图风格主题 (Design token) ===== */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+
+.dark {
+  --background: #101014;
+  --foreground: #f2efe8;
+  --card: #1a1a20;
+  --card-foreground: #f2efe8;
+  --popover: #1a1a20;
+  --popover-foreground: #f2efe8;
+  --primary: #e0a458;
+  --primary-foreground: #17120a;
+  --secondary: #24242c;
+  --secondary-foreground: #e8e4da;
+  --muted: #22222a;
+  --muted-foreground: #a7a29a;
+  --accent: #24242c;
+  --accent-foreground: #e0a458;
+  --destructive: #c85a3e;
+  --border: rgba(255, 244, 224, 0.12);
+  --input: rgba(255, 244, 224, 0.16);
+  --ring: #e0a458;
+  --chart-1: #e0a458;
+  --chart-2: #93b27b;
+  --chart-3: #c85a3e;
+  --chart-4: #7f9db9;
+  --chart-5: #cab381;
+  --sidebar: #131317;
+  --sidebar-foreground: #e8e4da;
+  --sidebar-primary: #e0a458;
+  --sidebar-primary-foreground: #17120a;
+  --sidebar-accent: #23232a;
+  --sidebar-accent-foreground: #e0a458;
+  --sidebar-border: rgba(255, 244, 224, 0.1);
+  --sidebar-ring: #e0a458;
+}
+
+body {
+  font-family: 'Noto Sans SC', 'PingFang SC', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-num {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 归一画布制图：细格网底 */
+.gris-canvas {
+  background-color: #101014;
+  background-image:
+    linear-gradient(rgba(255, 244, 224, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 244, 224, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
