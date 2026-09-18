@@ -2,7 +2,7 @@
 
 import L from 'leaflet';
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, CircleMarker, Circle, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, CircleMarker, Circle, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { District, GridCell } from '@/lib/scout-types';
 import type { Poi } from '@/lib/sources/places';
@@ -70,12 +70,23 @@ interface Props {
   mode: 'grid' | 'heat';
   districts: District[];
   selected: District | null;
+  focus: { lat: number; lng: number; radius: number } | null;
   radius: number;
   showTransit: boolean;
   showPois: boolean;
   showShortlist: boolean;
   pois: Poi[];
   onSelect: (d: District) => void;
+  onPlainClick: (latlng: { lat: number; lng: number }) => void;
+}
+
+function ClickCatcher({ onPlainClick }: { onPlainClick: Props['onPlainClick'] }) {
+  useMapEvents({
+    click(e) {
+      onPlainClick({ lat: e.latlng.lat, lng: e.latlng.lng });
+    },
+  });
+  return null;
 }
 
 export default function ScoutMap(p: Props) {
@@ -89,6 +100,7 @@ export default function ScoutMap(p: Props) {
       attributionControl
     >
       <FitView market={p.market} />
+      <ClickCatcher onPlainClick={p.onPlainClick} />
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; OpenStreetMap'
@@ -128,6 +140,21 @@ export default function ScoutMap(p: Props) {
           center={[p.selected.lat, p.selected.lng]}
           radius={p.radius}
           pathOptions={{ color: '#0b6b61', weight: 2, dashArray: '7 6', fillColor: '#30a896', fillOpacity: 0.07 }}
+        />
+      )}
+      {/* 任意点分析 focus（点 + catchment 圆环） */}
+      {p.focus && (
+        <Circle
+          center={[p.focus.lat, p.focus.lng]}
+          radius={Math.max(2, p.focus.radius / 2)}
+          pathOptions={{ color: '#e0a458', weight: 3, fillColor: '#e0a458', fillOpacity: 0.25 }}
+        />
+      )}
+      {p.focus && (
+        <Circle
+          center={[p.focus.lat, p.focus.lng]}
+          radius={p.focus.radius}
+          pathOptions={{ color: '#e0a458', weight: 2, dashArray: '5 5', fillColor: '#30a896', fillOpacity: 0.06 }}
         />
       )}
       {/* 商圈短名单点位 */}

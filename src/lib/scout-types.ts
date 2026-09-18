@@ -1,34 +1,10 @@
-// 纯类型定义（client 与 server 共用，不引入任何 Node 依赖）
-export interface IndicatorMeta {
-  // 血缘完整性：数据状态 / 实际来源 / 未来来源 / 计算方法 / 数据日期 / 覆盖率 / 置信度
-  status: 'real' | 'proxy' | 'demo';
-  actualSource: string; // 当前真正参与计算的数据源（代理/演示阶段为空）
-  futureSource: string; // 该指标计划接入的真实数据源
-  source: string; // 展示用来源名（代理阶段=演示标注，仅作说明）
-  date: string;
-  method: string; // 当前实际的计算方法（必须如实，禁止装成真实统计）
-  coverage: string;
-  confidence: string;
-}
+// GRIS 纯共享类型（client/server 通用；严禁 import better-sqlite3 / db.ts / scout.ts）
 
-export interface District {
-  area_key: string;
+export type MarketCode = 'SG' | 'HK';
+
+export interface Market {
+  code: MarketCode;
   name: string;
-  district_type: string;
-  region: string;
-  lat: number;
-  lng: number;
-  components: Record<string, number>;
-  metrics: Record<string, number>;
-  // 两组独立的人群结构，各自求和=100%，均非负
-  identity: { resident: number; office: number; tourist: number; student: number; other: number };
-  age: { a18_24: number; a25_34: number; a35_44: number; a45_plus: number };
-  confidence: string;
-  sources: { name: string; kind: string; date: string; method: string; url: string }[];
-  indicatorMeta: Record<string, IndicatorMeta>;
-  evidence: string[];
-  rank: number;
-  active_score: number;
 }
 
 export interface TradeAreaStats {
@@ -38,21 +14,65 @@ export interface TradeAreaStats {
   competitors: number;
   commercial: number;
   method: string;
-  // 半径内实际纳入聚合的周边商圈（体现空间非均匀，而非线性缩放）
   sampledDistricts: number;
-  coveredRate: number; // 0..1 该半径覆盖的商圈密度
-  // 参与积分的密度网格单元数；proxy=true 表示基于代理密度面而非真实 POI 落点
+  coveredRate: number;
   sampledCells: number;
   proxy: boolean;
 }
 
-export interface Market {
-  code: string;
-  name_zh: string;
-  name_en: string;
-  currency: string;
-  center_lat: number;
-  center_lng: number;
+export type DataStatus = 'real' | 'historical' | 'proxy' | 'mixed' | 'unavailable';
+
+/**
+ * 每个指标完整数据血缘（Truth Layer 每层必须能回答：
+ * 来源 / 日期 / 粒度 / 方法 / 置信度 / 缺失说明 / 数据版本）。
+ * status 诚实标识：real/historical/proxy/mixed/unavailable，禁止无 key 时伪装 real。
+ */
+export interface DataProvenance {
+  status: DataStatus;
+  source_name: string;
+  source_url?: string;
+  source_date?: string;
+  data_version?: string;
+  ingested_at?: number;
+  method: string;
+  spatial_granularity?: string;
+  confidence_score?: number;
+  confidence_reason?: string;
+  missing_note?: string;
+  // ---- 兼容旧 Evidence 渲染字段 ----
+  actualSource?: string;
+  futureSource?: string;
+  date?: string;
+  coverage?: string;
+  confidence?: string;
+}
+
+export type ComponentKey = 'transit' | 'commercial' | 'young' | 'resident' | 'tourism';
+
+export interface District {
+  area_key: string;
+  name: string;
+  district_type: string;
+  region: string;
+  lat: number;
+  lng: number;
+  components: Record<string, number>;
+  metrics: {
+    population: number;
+    traffic: number;
+    competitors: number;
+    commercial: number;
+  };
+  identity: { resident: number; office: number; tourist: number; student: number; other: number };
+  age: { a18_24: number; a25_34: number; a35_44: number; a45_plus: number };
+  confidence: string;
+  sources: { name: string; status?: DataStatus; kind?: string; date?: string; method?: string; url?: string }[];
+  indicatorMeta: Record<ComponentKey, DataProvenance>;
+  evidence: string[];
+  rank: number;
+  active_score: number;
+  model_version?: string;
+  opportunity_index?: number;
 }
 
 export interface GridCell {
@@ -60,6 +80,27 @@ export interface GridCell {
   lng: number;
   val: number;
   near?: string;
+}
+
+/** Street Heat 连续热面单元（/api/scout/heat 返回） */
+export interface HeatPoint {
+  lat: number;
+  lng: number;
+  intensity: number;
+  provider: 'real' | 'demo';
+}
+
+/** 任意点分析（/api/scout/point）返回值之一 */
+export interface PointAnalysis {
+  market: MarketCode;
+  lat: number;
+  lng: number;
+  subzone: string | null;
+  district_key: string | null;
+  nearest_transit: { name: string; distance_m: number; tap: number | null } | null;
+  cell: { id: string; values: Record<ComponentKey, number> } | null;
+  nearby: { provider: string; name: string; category: string; distance_m: number }[];
+  provenance: Record<ComponentKey, DataProvenance>;
 }
 
 export interface Candidate {

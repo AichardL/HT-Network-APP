@@ -149,6 +149,28 @@ GET /api/scout/tradearea?market=&key=&radius=(km)、GET/POST/DELETE /api/scout/c
 - 地图底图用开源 OSM 瓦片，无 key 依赖；Firestore / Cloud Run / LTA 等新加坡官方数据源为后续升级位
   （参考方案文档中的 roadmap），当前以 adapter + fixture 隐式降级，不阻塞演示。
 
+### Stage 1 — Truth/Street-Heat 真相层（GRIS_Singapore_Truth_Street_Heat_Upgrade_Spec）
+核心目标：地图任意点的「数字」都能回答来源/方法/日期/置信度；诚实优先，无 key 一律标
+`unavailable/proxy`，绝不把「商圈类型预设值 + 确定性扰动」冒充官方统计。
+- **打分**：`src/lib/scoring/config.ts` 唯一权重来源（O=0.35T+0.25C+0.15Y+0.15R+0.10T），
+  `MODEL_VERSION='gris-oi-v1'`；改变即递增并记 AGENTS。`scout.parseRow` 现已填
+  `district.model_version` + `opportunity_index`（=旧 composeScore 同构，保留 alias）。
+- **血缘**：`src/lib/scoring/provenance.ts` → `proxyProvenance()` 构造各分量诚实 DataProvenance；
+  `src/lib/sources/registry.ts` 声明每层 real/unavailable + future_source + env_key；
+  `DATA_MODE`(truth/demo) 环境变量，`dataMode()` 读取。**禁止无 key 时标 real。**
+- **空间层** `src/lib/spatial/`：`geometry`(haversine≈104/111、inPoly、round×网格交叠 sample)、
+  `decay`(gauss 平滑 + thresholdKernel (1-d/R)²)、`cells`(固定网格，H3 前来替代，SG_POLY 裁剪)、
+  `heat`(bbox+zoom 懒加载连续热面，`bandwidthForZoom` 缩放带宽，provider real/demo)、
+  `catchment`(任意点圆×网格交叠 pop/traffic/comp/commercial + cells 高亮 + proxy)。用固定网格而非真 H3。
+- **新 API（均需 Bearer）**：`/api/scout/data-status?market=`、`/api/scout/heat?bbox&zoom&theme`、
+  `/api/scout/point?lat&lng`、`/api/scout/catchment?lat&lng&radius`。
+- **前端**：scout-board 默认走 `数据状态`(data-status pill) + 地图空白处点击 → 任意点分析面板
+  （point 分量估值 + catchment 半径 0.5/1/1.5km 切换 + 诚实 method 提示）；map 新增
+  `onPlainClick` + `focus` 圆环（scout-map ClickCatcher）。地图热力仍由 `/api/scout/grid` 的
+  district 扩散面渲染（`/api/scout/heat` 已就绪未接线到地图——下一步把地图 cells 改按 bbox+zoom 拉取 heat）。
+- **数据源 key**：`GOOGLE_PLACES_API_KEY`（用户将提供）、`GRIS_LTA_ACCOUNT_KEY`、`GRIS_ONEMAP_TOKEN`
+  ≈ LTA/OneMap/SingStat 接入位；未配则全部 unavailable + honest note。**禁止跨城市串源。**
+
 ### 常见问题与预防
 - 改 schema/种子后删 `data/scout.db`（或升 SCHEMA_VERSION）触发重建+重种子；DB 文件勿提交。
   重建后旧库的 audience 字段（旧 flat 人群）需同步升级为 identity/age 双组，否则 parseRow 解析会错。

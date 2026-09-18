@@ -6,8 +6,9 @@ import {
   Play, Download, Map as MapIcon, Flame, Train, CupSoda, CircleDot, Search, Save, Trash2,
 } from 'lucide-react';
 import { useMarket } from '@/components/app-shell';
-import type { District, Candidate, TradeAreaStats } from '@/lib/scout-types';
+import type { District, Candidate, TradeAreaStats, PointAnalysis } from '@/lib/scout-types';
 import type { Poi } from '@/lib/sources/places';
+import type { CatchmentResult } from '@/lib/spatial/catchment';
 
 const ScoutMap = dynamic(() => import('@/components/map/scout-map'), { ssr: false });
 
@@ -59,6 +60,10 @@ export default function ScoutBoard() {
   const [districts, setDistricts] = useState<District[]>([]);
   const [cells, setCells] = useState<{ lat: number; lng: number; val: number }[]>([]);
   const [selected, setSelected] = useState<District | null>(null);
+  const [focus, setFocus] = useState<{ lat: number; lng: number; radius: number } | null>(null);
+  const [focusRadius, setFocusRadius] = useState(1);
+  const [focusData, setFocusData] = useState<{ point: PointAnalysis; catchment: CatchmentResult } | null>(null);
+  const [statusInfo, setStatusInfo] = useState<{ data_mode: string; live_layers: string[] } | null>(null);
   const [pois, setPois] = useState<Poi[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [placesEnabled, setPlacesEnabled] = useState(false);
@@ -66,6 +71,46 @@ export default function ScoutBoard() {
   const [ta, setTa] = useState<TradeAreaStats | null>(null);
   const [loading, setLoading] = useState(true);
   const reqRef = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    api(`/api/scout/data-status?market=${market}`)
+      .then((r) => r.json())
+      .then((s) => alive && setStatusInfo(s as { data_mode: string; live_layers: string[] }))
+      .catch(() => alive && setStatusInfo(null));
+    return () => {
+      alive = false;
+    };
+  }, [market, api]);
+
+  const handlePlainClick = useCallback(
+    async (latlng: { lat: number; lng: number }) => {
+      setSelected(null);
+      setFocus({ lat: latlng.lat, lng: latlng.lng, radius: focusRadius * 1000 });
+      setFocusData(null);
+      try {
+        const [pt, ct] = await Promise.all([
+          api(`/api/scout/point?market=${market}&lat=${latlng.lat}&lng=${latlng.lng}`).then((r) => r.json()),
+          api(`/api/scout/catchment?market=${market}&lat=${latlng.lat}&lng=${latlng.lng}&radius=${focusRadius}`).then((r) => r.json()),
+        ]);
+        setFocusData({ point: pt as PointAnalysis, catchment: ct as CatchmentResult });
+      } catch {
+        setFocusData(null);
+      }
+    },
+    [market, api, focusRadius],
+  );
+
+  const refetchFocus = useCallback(async () => {
+    if (!focus) return;
+    setFocus({ ...focus, radius: focusRadius * 1000 });
+    try {
+      const ct = await api(`/api/scout/catchment?market=${market}&lat=${focus.lat}&lng=${focus.lng}&radius=${focusRadius}`).then((r) => r.json());
+      setFocusData((prev) => (prev ? { ...prev, catchment: ct as CatchmentResult } : prev));
+    } catch {
+      /* keep last */
+    }
+  }, [focus, focusRadius, market, api]);
 
   const loadDistricts = useCallback(async () => {
     setLoading(true);
@@ -321,29 +366,108 @@ export default function ScoutBoard() {
             mode={mode}
             districts={districts}
             selected={selected}
+            focus={
+              focus && !selected
+                ? focus
+                : null
+            }
             radius={radius}
             showTransit={showTransit}
             showPois={showPois}
             showShortlist={showShortlist}
             pois={pois}
             onSelect={pick}
+            onPlainClick={handlePlainClick}
           />
           <div className="pointer-events-none absolute left-3 bottom-3 z-[600] rounded-lg bg-black/70 px-3 py-2 text-[10px] leading-relaxed text-white">
             <b>{market === 'SG' ? '新加坡 · 全城扫描' : '香港 · 全城扫描'}</b>
             <br />
-            {mode === 'grid' ? '数据网格' : '热力渐变'} · {THEMES.find((t) => t.key === theme)?.label} · 代理指标
+            {mode === 'grid' ? '数据网格' : '街道热力'} · {THEMES.find((t) => t.key === theme)?.label} ·{' '}
+            {statusInfo?.data_mode === 'truth' ? '真实数据' : '🔶 演示/代理数据'}
           </div>
           <div className="pointer-events-none absolute left-3 top-3 z-[600] flex items-center gap-2 rounded-lg bg-white/85 px-3 py-1.5 text-[11px] font-semibold">
             <CircleDot className="h-3.5 w-3.5 text-[#0b6b61]" />
-            {selected ? selected.name : '点击商圈点位查看证据卡'}
+            {selected ? selected.name : focus ? '任意点分析（点击查看）' : '点击商圈点位查看证据卡 · 点击空处任意点分析'}
           </div>
         </section>
 
-        {/* 右栏：证据卡 */}
+        {/* 右栏：证据卡 / 任意点分析 */}
         <aside className="flex min-h-0 flex-col overflow-auto rounded-xl border border-border bg-card">
-          {!selected ? (
+          {!selected && focus ? (
+            <div className="p-4">
+              <div className="sticky top-0 z-10 -m-4 mb-3 border-b border-border bg-card p-4">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">任意点分析</span>
+                <h2 className="mt-1 text-base font-bold">
+                  {focus.lat.toFixed(4)}, {focus.lng.toFixed(4)}
+                </h2>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  地图空白处点击任意街铺/坐标，来自 Demo 影响面的代理估值（未接入真实数据）。
+                </p>
+              </div>
+
+              {/* 分量估值 */}
+              {focusData?.point ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['transit', 'commercial', 'young', 'resident', 'tourism'] as const).map((k) => (
+                    <div key={k} className="rounded-lg bg-muted/50 p-2.5">
+                      <div className="text-[10px] text-muted-foreground">{THEMES.find((t) => t.key === k)?.label}</div>
+                      <div className="font-num text-lg font-bold text-[#0b6b61]">{focusData.point.cell?.values?.[k] ?? 0}</div>
+                    </div>
+                  ))}
+                  <div className="col-span-2 rounded-lg bg-muted/50 p-2.5 text-[10px] text-muted-foreground">
+                    所属商圈：{focusData.point.district_key ?? '—'} · 最近轨道交通：{focusData.point.nearest_transit?.name ?? '未接入 LTA（无 key）'}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 text-center text-xs text-muted-foreground">加载中…</div>
+              )}
+
+              {/* Catchment */}
+              {focusData?.catchment && (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[12px] font-semibold">周边 Catchment</span>
+                    {([0.5, 1, 1.5] as const).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setFocusRadius(r)}
+                        className={`rounded-md border px-2 py-0.5 text-[10px] ${focusRadius === r ? 'border-[#e0a458] bg-[#e0a458]/10 text-[#0b6b61]' : 'border-border text-muted-foreground'}`}
+                      >
+                        {r}km
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    {[
+                      ['人口', `${(focusData.catchment.population / 1000).toFixed(1)}k`],
+                      ['交通量', `${(focusData.catchment.traffic / 1e6).toFixed(2)}M`],
+                      ['竞品', `${focusData.catchment.competitors}`],
+                      ['商业设施', `${focusData.catchment.commercial}`],
+                      ['覆盖商圈', `${focusData.catchment.sampledDistricts}`],
+                      ['覆盖网格', `${focusData.catchment.sampledCells}`],
+                    ].map(([k, v]) => (
+                      <div key={k} className="flex justify-between rounded-lg bg-muted/40 px-2.5 py-1.5">
+                        <span className="text-muted-foreground">{k}</span>
+                        <b className="text-foreground">{v}</b>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={refetchFocus}
+                    className="mt-2 w-full rounded-md border border-[#0b6b61] py-1.5 text-[11px] font-semibold text-[#0b6b61] hover:bg-[#0b6b61]/5"
+                  >
+                    按 {focusRadius}km 重新聚合
+                  </button>
+                  <p className="mt-2 rounded-lg bg-yellow-500/10 p-2 text-[10px] leading-relaxed text-yellow-600">
+                    🔶 演示/代理数据：{focusData.catchment.method}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : !selected ? (
             <div className="flex flex-1 items-center justify-center px-6 py-16 text-center text-xs text-muted-foreground">
-              从左侧短名单或地图点选一个商圈<br />查看综合评分、指标依据与数据来源
+              从左侧短名单或地图点选一个商圈<br />查看综合评分、指标依据与数据来源<br /><br />
+              或点击地图空处，对任意街铺/坐标做点位分析
             </div>
           ) : (
             <>

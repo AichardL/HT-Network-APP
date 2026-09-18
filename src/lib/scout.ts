@@ -1,5 +1,6 @@
 import { getDb } from './db';
 import type { District, GridCell, Market, Candidate, TradeAreaStats } from './scout-types';
+import { opportunityIndex, MODEL_VERSION } from './scoring/config';
 
 // scout 服务层：新加坡（主力，可扩展 HK/BKK/KUL）选址考察的数据访问与网格/评分计算。
 
@@ -51,6 +52,8 @@ function parseRow(r: Record<string, unknown>): District {
     evidence: JSON.parse(r.evidence as string),
     rank: r.rank as number,
     active_score: r.active_score as number,
+    model_version: MODEL_VERSION,
+    opportunity_index: opportunityIndex(JSON.parse(r.components as string)),
   };
 }
 
