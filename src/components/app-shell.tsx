@@ -4,14 +4,10 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Map,
-  Route,
-  Crosshair,
-  Database,
-  ScrollText,
   LogOut,
   CupSoda,
+  Crosshair,
+  ScrollText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoginPanel } from '@/components/login';
@@ -35,11 +31,7 @@ export const useMarket = () => {
 };
 
 const NAV = [
-  { href: '/', label: '总览', icon: LayoutDashboard },
-  { href: '/districts', label: '商圈划定', icon: Map },
-  { href: '/planning', label: '项目规划', icon: Route },
-  { href: '/selection', label: '精准选址', icon: Crosshair },
-  { href: '/data', label: '数据中心', icon: Database },
+  { href: '/', label: '选址考察台', icon: Crosshair },
   { href: '/audit', label: '审计日志', icon: ScrollText },
 ];
 
@@ -48,7 +40,7 @@ const TOKEN_KEY = 'gris_token';
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<{ username: string; role: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [market, setMarket] = useState<MarketCode>('HK');
+  const [market, setMarket] = useState<MarketCode>('SG');
   const [token, setToken] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
@@ -118,8 +110,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <CupSoda className="h-5 w-5" strokeWidth={1.8} />
               </div>
               <div className="leading-tight">
-                <div className="text-sm font-bold text-foreground">GRIS</div>
-                <div className="text-[11px] text-muted-foreground">茶饮行业网络规划系统</div>
+                <div className="text-sm font-bold text-foreground">GRIS · 选址考察台</div>
+                <div className="text-[11px] text-muted-foreground">海外门店选址系统</div>
               </div>
             </div>
             <nav className="mt-2 flex-1 space-y-0.5 px-3">

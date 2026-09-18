@@ -64,50 +64,67 @@
 - 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
 - Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
 
-## 本项目 GRIS：香港/新加坡茶饮网络规划系统
+## 本项目 GRIS：香港/新加坡茶饮门店选址考察台（Scout）
 
 ### 项目概述
-商业级茶饮行业网络规划系统（GRIS），面向香港(HK)与新加坡(SG)市场，提供：
-商圈划定分析、门店网络项目规划、精准选址推荐、人流/客群数据查询、商业化安全与审计。
+以《Singapore_Site_Selection_Full_Plan.md》方案为准整体重建的商业级门店选址系统
+（GRIS Scout），跑通「商圈评级 → 全城网格扫描 → 证据卡 → 候选点沉淀」的考察工作流。
+主力市场新加坡（SG，可扩展 HK/BKK/KUL），左栏短名单 + 中栏 Leaflet 地图（网格/热力层）+
+右栏证据卡的三栏考察台。
 
 ### 技术栈补充
-- **底层数据库**：`better-sqlite3`（Node 原生嵌入式数据库），运行时于 `data/gris.db`
-  自动建库 + 灌入 HK/SG 种子示意数据（首次访问时生成）。`next.config.ts` 已用
-  `serverExternalPackages: ["better-sqlite3"]` 将原生模块 external 化，避免被 Next 打入构建产物。
-- **数据访问**：`src/lib/db.ts`（连接+Schema+种子）、`src/lib/repo.ts`（仓储查询）、
-  `src/lib/services.ts`（商圈/选址/规划算法）、`src/lib/api.ts`（统一 API 封装+鉴权+审计）、`src/lib/auth.ts`（Salted 登录+HMAC Cookie 会话）。
+- **底层数据库**：`better-sqlite3`（Node 原生嵌入式数据库），运行时于 `data/scout.db`
+  自动建库 + 灌入 SG/HK 种子（首次访问时生成）。`next.config.ts` 的
+  `serverExternalPackages: ["better-sqlite3"]` 已把原生模块 external 化，避免被打入客户端 bundle，
+  **严禁在 `'use client'` 组件里 import db.ts / scout.ts**（只能 `import type`）。
+- **数据访问分层**：
+  - `src/lib/db.ts`：连接 + Schema + 种子（确定性种子：mulberry32 + TYPE_BASE，重建可复现）。
+  - `src/lib/scout.ts`：服务层（listMarkets / listDistricts / getDistrict / generateGrid /
+    listCandidates / saveCandidate / deleteCandidate / composeScore），高斯平滑网格、主题打分。
+  - `src/lib/scout-types.ts`：纯共享类型（District/Market/GridCell/Candidate），client/server 共用。
+  - `src/lib/sources/places.ts`：Google Places adapter（见「数据源接入」）。
+  - `src/lib/api.ts`（鉴权+审计）、`src/lib/auth.ts`（登录令牌，Bearer 优先 / cookie 兜底）。
 
-### 数据库 Schema（data/gris.db，均为运行时生成，勿提交）
-markets / zones(商圈区域) / sites(候选点位) / foot_traffic(分时人流) /
-customer_zone(客群画像) / districts(商圈划定结果) / projects(项目) /
-project_sites(项目点位) / users(登录用户) / audit_log(审计)。
+### 数据库 Schema（data/scout.db，均为运行时生成，勿提交）
+markets / scout_districts（商圈，含冗余 JSON：components/metrics/audience/sources/evidence、
+confidence、rank、active_score）/ candidates / users / audit_log。
 
-### API（全部需 Bearer 登录 Cookie；见 src/app/api/**/route.ts）
-POST /api/auth/login、GET /api/auth/me、GET /api/market、GET /api/overview/[market]、
-GET /api/sites/[market]、GET /api/customers/[market]、GET /api/foottraffic/[id]、
-POST/GET /api/districts（商圈划定/查询）、POST /api/selection（选址）、
-POST/GET /api/planning（项目规划）、GET /api/audits（审计日志）。
+### 打分与网格
+- 综合分 `composeScore`：0.35 交通 + 0.25 商业 + 0.15 年轻 + 0.15 社区 + 0.10 游客。
+- `generateGrid`：以商圈为影响源做高斯平滑（sigma≈5km），按主题输出全城得分面；
+  SG 按真实陆地多边形（SG_POLY + inPoly）裁剪。GridCell.val ∈ [28,98]。
+
+### API（全部需 Bearer 登录令牌；见 src/app/api/**/route.ts）
+POST /api/auth/login、GET /api/auth/me、GET /api/scout/boot（markets/themes/类型/placesEnabled）、
+GET /api/scout/districts?market=、GET /api/scout/district/[market]/[key]、
+GET /api/scout/grid?market=&theme=、GET /api/scout/places?q=&lat=&lng=、
+GET/POST/DELETE /api/scout/candidates、GET /api/audits。
 
 ### 默认登录账号
 管理员：`admin` / `gris-admin-2024`（位于 src/lib/auth.ts ADMIN_PASSWORD_HASH，可改）。
 
 ### 前端
-- `src/app/page.tsx` 总览；`/districts` 商圈划定；`/planning` 项目规划；`/selection` 选址；
-  `/data` 数据查询；`/audit` 审计。
-- `src/components/app-shell.tsx`（鉴权门+侧边栏）、`login.tsx`、`plan-canvas.tsx`（归一化 SVG 制图画布，无外部地图依赖）。
-- 暗色制图风格 Token 定义在 `src/app/globals.css` 的 `.dark` 块（陶瓷琥珀 #e0a458 点缀）；`design` 详见 `DESIGN.md`。
+- `src/app/page.tsx` → `src/components/scout-board.tsx`（三栏考察台，客户端组件）；
+  地图 `src/components/map/scout-map.tsx` 通过 `dynamic(..., {ssr:false})` 懒加载
+  （react-leaflet v5 + OSM 瓦片，无需 key，`preferCanvas`）。
+- `/audit` 审计日志；`src/components/app-shell.tsx`（鉴权门 + 侧边栏 HK/SG 切换 + useMarket 上下文），
+  `login.tsx` 登录页。
+- 暗色制图风格 Token 定义在 `src/app/globals.css` 的 `.dark` 块（陶瓷琥珀 #e0a458 点缀）；详见 `DESIGN.md`。
 
-### 运行与验证
-- 预览/部署入口见 `.coze [dev]/[deploy]`（scripts/build.sh 构建，start.sh 以 5000 启动 `node dist/server.js`）。
-- **只能 pnpm**；容器内临时排障可 `pnpm exec tsx -e "..."` 直接调 lib 层算法。
-- 验收只认 `test_run`：接口带鉴权，且各 curl 需**各自独立登录**（test_run 各命令并发执行，
-  共用 cookie jar 会因读写竞态产生随机 401）。正确姿势：`J=/tmp/g_$$.jar; curl login -c $J; curl -b $J <endpoint>`。
+### 数据源接入（真实数据需配置 key，未配置则走明确标记的演示分级数据）
+- `GOOGLE_PLACES_API_KEY`：配了 → `/api/scout/places` 走真实 Google Nearby Search 竞品；
+  未配 → `fixture()` 返回 `real:false` 的演示分级 POI，前端会展示「演示数据」角标。
+- 地图底图用开源 OSM 瓦片，无 key 依赖；Firestore / Cloud Run / LTA 等新加坡官方数据源为后续升级位
+  （参考方案文档中的 roadmap），当前以 adapter + fixture 隐式降级，不阻塞演示。
 
 ### 常见问题与预防
-- 改 schema/算法后，删 `data/gris.db` 或改版本号即可触发重建+重种子；DB 文件勿提交。
+- 改 schema/种子后删 `data/scout.db`（或升 SCHEMA_VERSION）触发重建+重种子；DB 文件勿提交。
 - 前端调用一律相对路径 `/api/...`，禁止硬编码域名/localhost。
-- 登录/会话依赖模块级 SECRET 常量，改 auth.ts 会使历史 Cookie 失效（属正常）。
-- 地图为 SVG 归一画布（0..100 坐标），未接第三方地图 key；如需真实底图再引入 map 服务。
+- 令牌由模块级 SECRET 常量签名（auth.ts），改动会使历史令牌失效（正常）。
+- 严禁在 `'use client'`（scout-board / scout-map）import better-sqlite3 或 db.ts/scout.ts；
+  类型一律走 `scout-types.ts` 的 `import type`（否则客户端 bundle 启动即崩）。
+- 网格/证据卡数据来自确定性种子；如需真实客流/客群，按「数据源接入」配置 key 或换官方数据源 adapter。
+
 ### Tailwind v4 常见坑
 - 在 `globals.css` 里通过 `@import url(...)` 引入 Google Fonts 时，必须把它放在**文件第一行、`@import 'tailwindcss'` 之前**；否则 Tailwind v4 就地展开 `tailwindcss` 后会把字体 `@import` 顶到编译产物中段，触发 `@import rules must precede all rules` 编译失败、页面全部 500。
 ### 会话鉴权（重要）
