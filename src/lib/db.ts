@@ -98,10 +98,17 @@ function ensureSchema(db: Database.Database) {
     method TEXT NOT NULL,
     path TEXT NOT NULL,
     status INTEGER NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
     at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
   `);
+  // 迁移：老库的 audit_log 缺 ip 列，补上（已存在则忽略）
+  try {
+    db.exec('ALTER TABLE audit_log ADD COLUMN ip TEXT NOT NULL DEFAULT \'\'');
+  } catch {
+    /* already exists */
+  }
 }
 
 // ---------- 人群结构模型（两组互斥占比，各自求和=100%，杜绝负数） ----------
@@ -140,39 +147,25 @@ function ageAnchors(young: number, community: number): number[] {
 }
 
 // ---------- 市场维度数据源（香港/新加坡各自独立的数据血缘） ----------
-type IndicatorMeta = { source: string; date: string; method: string; coverage: string; confidence: string };
+type IndicatorMeta = { status: 'real' | 'proxy' | 'demo'; actualSource: string; futureSource: string; source: string; date: string; method: string; coverage: string; confidence: string };
 
-// 各城市指标 → 来源映射；date 为相对更新节奏（种子为低频示意，真实接入后按源实况替换）
+// 各城市指标 → 来源映射；date 为相对更新节奏。
+// 诚实原则：当前是「代理商圈预设 + 确定性扰动」的演示代理，actualSource 为空、method 如实标注，
+// futureSource 给出该指标计划接入的真实数据源；接入真实数据后把 status 改为 real 并填 actualSource。
+const DEMO_METHOD = '商圈类型预设值 + 确定性扰动（代理）';
 const SG_INDICATOR_SRC: Record<string, Omit<IndicatorMeta, 'coverage'>> = {
-  transit: { source: 'LTA 轨道交通 / 公共巴士客运量', date: '提取自 LTA 2024 年度数据集', method: '站点进出站客流 + 巴士走廊断面，归一化到商圈步行距离', confidence: 'B' },
-  commercial: { source: 'URA 商业区划 / OSM 设施密度', date: '2024 年人口普查 + 近期更新', method: '商圈半径内零售/餐饮 POI 核密度', confidence: 'C' },
-  young: { source: 'SingStat 人口与年龄结构', date: '2020 年人口普查 + 常驻估算', method: '20-44 岁人口占比（按规划区）', confidence: 'B' },
-  resident: { source: 'SingStat / HDB 居住人口密度', date: '2020 年人口普查 + 常驻估算', method: '规划区/邻里常住人口密度', confidence: 'B' },
-  tourism: { source: '新加坡旅游局(STB) 到访与停留数据', date: '2023-2024 年度报告', method: '热门旅游吸引点周边到访强度', confidence: 'C' },
+  transit: { status: 'proxy', actualSource: '', futureSource: 'LTA DataMall 客运量(MRT/Bus)'  , source: '演示', date: '2024（占位）', method: DEMO_METHOD, confidence: 'B' },
+  commercial: { status: 'proxy', actualSource: '', futureSource: 'OSM POI / URA 商业用地'   , source: '演示', date: '2024（占位）', method: DEMO_METHOD, confidence: 'C' },
+  young:    { status: 'proxy', actualSource: '', futureSource: 'SingStat 人口年龄结构'      , source: '演示', date: '2020 普查（占位）', method: DEMO_METHOD, confidence: 'B' },
+  resident: { status: 'proxy', actualSource: '', futureSource: 'SingStat / HDB 常驻人口密度', source: '演示', date: '2020 普查（占位）', method: DEMO_METHOD, confidence: 'B' },
+  tourism:  { status: 'proxy', actualSource: '', futureSource: '新加坡旅游局(STB) 到访数据'  , source: '演示', date: '2023-2024（占位）', method: DEMO_METHOD, confidence: 'C' },
 };
 const HK_INDICATOR_SRC: Record<string, Omit<IndicatorMeta, 'coverage'>> = {
-  transit: { source: '运输署 / 港铁(MTR) 站点客流', date: '运输署 2023 年度旅次统计', method: '港铁出入闸 + 车站步行可达范围', confidence: 'B' },
-  commercial: { source: '规划署(PlanD) 用地 / OSM 设施密度', date: '2023 年规划数据 + 近期更新', method: '商圈半径内零售/餐饮 POI 核密度', confidence: 'C' },
-  young: { source: '香港政府统计处 人口年龄结构', date: '2021 年人口普查', method: '20-44 岁人口占比（按分区）', confidence: 'B' },
-  resident: { source: '政府统计处 / 规划署 人口密度', date: '2021 年人口普查', method: '分区常住人口密度', confidence: 'B' },
-  tourism: { source: '香港旅游发展局 访港旅客分布', date: '2023 年度数据', method: '主要旅客吸引点周边到访强度', confidence: 'C' },
-};
-
-// 汇总来源列表（<市>维度 prepend 进去），供证据卡「数据来源」展示
-const METRIC_METHOD: Record<string, string> = {
-  transit: '站点/通道客流等指标',
-  commercial: 'POI 核密度',
-  young: '年龄结构占比',
-  resident: '常住密度',
-  tourism: '到访强度',
-};
-const METRIC_SOURCE_BY_MARKET: Record<string, Record<string, string>> = {
-  SG: {
-    transit: 'LTA', commercial: 'URA / OSM', young: 'SingStat', resident: 'SingStat / HDB', tourism: '新加坡旅游局',
-  },
-  HK: {
-    transit: '运输署 / MTR', commercial: '规划署 / OSM', young: '政府统计处', resident: '政府统计处', tourism: '香港旅发局',
-  },
+  transit: { status: 'proxy', actualSource: '', futureSource: '运输署 / 港铁(MTR) 出入闸客流', source: '演示', date: '2023（占位）', method: DEMO_METHOD, confidence: 'B' },
+  commercial: { status: 'proxy', actualSource: '', futureSource: '规划署(PlanD) 用地 / OSM POI', source: '演示', date: '2023（占位）', method: DEMO_METHOD, confidence: 'C' },
+  young:    { status: 'proxy', actualSource: '', futureSource: '政府统计处 人口年龄结构'      , source: '演示', date: '2021 普查（占位）', method: DEMO_METHOD, confidence: 'B' },
+  resident: { status: 'proxy', actualSource: '', futureSource: '政府统计处 / 规划署 常驻密度', source: '演示', date: '2021 普查（占位）', method: DEMO_METHOD, confidence: 'B' },
+  tourism:  { status: 'proxy', actualSource: '', futureSource: '香港旅游发展局 访港旅客分布'  , source: '演示', date: '2023（占位）', method: DEMO_METHOD, confidence: 'C' },
 };
 
 // 评分公式（方案原文）：综合活跃度 = 0.35*交通 + 0.25*商业 + 0.15*年轻客群 + 0.15*社区居住 + 0.10*游客
@@ -275,6 +268,9 @@ function buildDistrict(d: RawDistrict, market: string): DistrictSeed {
   (['transit', 'commercial', 'young', 'resident', 'tourism'] as const).forEach((c) => {
     const t = srcTpl[c];
     indicatorMeta[c] = {
+      status: t.status,
+      actualSource: t.actualSource,
+      futureSource: t.futureSource,
       source: t.source,
       date: t.date,
       method: t.method,
@@ -283,11 +279,19 @@ function buildDistrict(d: RawDistrict, market: string): DistrictSeed {
     };
   });
 
-  // 汇总来源列表
-  const sourceRows = Object.values(METRIC_SOURCE_BY_MARKET[market]).map((name, i) => {
-    const metricKey = Object.keys(METRIC_SOURCE_BY_MARKET[market])[i];
-    return { name, kind: '官方数据', date: indicatorMeta[metricKey].date, method: METRIC_METHOD[metricKey], url: '' };
-  });
+  // 汇总来源列表：直接由各指标的诚实血缘生成（避免裸列 "LTA/SingStat" 造成"该分数由真实数据算出"的误导）
+  const sourceRows = (['transit', 'commercial', 'young', 'resident', 'tourism'] as const)
+    .filter((ck) => indicatorMeta[ck])
+    .map((ck) => {
+      const m = indicatorMeta[ck];
+      return {
+        name: m.status === 'real' ? `真实接入：${m.actualSource || m.futureSource}` : `代理（计划接入：${m.futureSource}）`,
+        kind: m.status === 'real' ? '真实数据' : '代理',
+        date: m.date,
+        method: m.method,
+        url: '',
+      };
+    });
 
   return {
     area_key: key,

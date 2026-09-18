@@ -1,8 +1,12 @@
 // 纯类型定义（client 与 server 共用，不引入任何 Node 依赖）
 export interface IndicatorMeta {
-  source: string;
+  // 血缘完整性：数据状态 / 实际来源 / 未来来源 / 计算方法 / 数据日期 / 覆盖率 / 置信度
+  status: 'real' | 'proxy' | 'demo';
+  actualSource: string; // 当前真正参与计算的数据源（代理/演示阶段为空）
+  futureSource: string; // 该指标计划接入的真实数据源
+  source: string; // 展示用来源名（代理阶段=演示标注，仅作说明）
   date: string;
-  method: string;
+  method: string; // 当前实际的计算方法（必须如实，禁止装成真实统计）
   coverage: string;
   confidence: string;
 }
@@ -37,6 +41,9 @@ export interface TradeAreaStats {
   // 半径内实际纳入聚合的周边商圈（体现空间非均匀，而非线性缩放）
   sampledDistricts: number;
   coveredRate: number; // 0..1 该半径覆盖的商圈密度
+  // 参与积分的密度网格单元数；proxy=true 表示基于代理密度面而非真实 POI 落点
+  sampledCells: number;
+  proxy: boolean;
 }
 
 export interface Market {

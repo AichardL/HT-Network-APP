@@ -27,6 +27,24 @@ const TYPE_COLORS: Record<string, string> = {
   旅游: '#f1bd42',
 };
 
+// 主题 → 分量：主题分析应使用对应分量的原始强度（0-100），并在市域内重排，而非一直用综合活跃度/全局排名
+const THEME_COMP: Record<string, string> = {
+  transit: 'transit', commercial: 'commercial', young: 'young', resident: 'resident', tourism: 'tourism',
+};
+
+function themeInfo(
+  d: District,
+  t: string,
+  list: District[],
+): { score: number; label: string; rank: number } {
+  if (t === 'overall') return { score: d.active_score, label: '综合活跃度', rank: d.rank };
+  const c = THEME_COMP[t];
+  const comp = (d.components[c] ?? 0) * 100;
+  const sorted = [...list].sort((a, b) => (b.components[c] ?? 0) - (a.components[c] ?? 0));
+  const rank = sorted.findIndex((x) => x.area_key === d.area_key) + 1;
+  return { score: Math.round(comp), label: THEMES.find((x) => x.key === t)?.label ?? '', rank };
+}
+
 export default function ScoutBoard() {
   const { market, api } = useMarket();
   const [theme, setTheme] = useState('overall');
@@ -156,7 +174,7 @@ export default function ScoutBoard() {
     const head = kind === 'shortlist' ? '排名,商圈,类型,区域,活跃度\n' : '名称,商圈,备注,创建者\n';
     const body =
       kind === 'shortlist'
-        ? filtered.map((d) => [d.rank, d.name, d.district_type, d.region, d.active_score].join(',')).join('\n')
+        ? filtered.map((d) => [themeInfo(d, theme, districts).rank, d.name, d.district_type, d.region, themeInfo(d, theme, districts).score].join(',')).join('\n')
         : candidates.map((c) => [c.name, c.area_key, c.note, c.created_by].join(',')).join('\n');
     const blob = new Blob(['\ufeff' + head + body], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -281,13 +299,13 @@ export default function ScoutBoard() {
                     className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-bold text-white"
                     style={{ background: selected?.area_key === d.area_key ? '#0b6b61' : TYPE_COLORS[d.district_type] || '#6f80d4' }}
                   >
-                    {d.rank}
+                    {themeInfo(d, theme, districts).rank}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12px] font-medium">{d.name}</span>
                     <span className="block text-[10px] text-muted-foreground">{d.district_type} · {d.region}</span>
                   </span>
-                  <span className="font-num text-[13px] font-bold text-[#0b6b61]">{d.active_score}</span>
+                  <span className="font-num text-[13px] font-bold text-[#0b6b61]">{themeInfo(d, theme, districts).score}</span>
                 </button>
               ))}
               {!filtered.length && <div className="py-8 text-center text-xs text-muted-foreground">无匹配商圈</div>}
@@ -346,9 +364,14 @@ export default function ScoutBoard() {
 
               <div className="mx-4 mt-3 rounded-xl bg-gradient-to-br from-[#0a7468] to-[#119486] p-4 text-white">
                 <div className="mb-1 text-[11px] text-[#d3f0eb]">{THEMES.find((t) => t.key === theme)?.label}</div>
-                <div className="font-num text-4xl font-black leading-none">{selected.active_score}<small className="text-sm font-semibold">/100</small></div>
+                <div className="font-num text-4xl font-black leading-none">
+                  {themeInfo(selected, theme, districts).score}
+                  <small className="text-sm font-semibold">/100</small>
+                </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  <span className="rounded-md bg-[#f1bd42] px-2 py-0.5 text-[10px] font-bold text-[#453000]">全城 #{selected.rank}</span>
+                  <span className="rounded-md bg-[#f1bd42] px-2 py-0.5 text-[10px] font-bold text-[#453000]">
+                    全城 #{themeInfo(selected, theme, districts).rank} · {themeInfo(selected, theme, districts).label}
+                  </span>
                   <span className="rounded-md bg-white/20 px-2 py-0.5 text-[10px]">{radius / 1000} km Trade area</span>
                   <span className="rounded-md bg-white/20 px-2 py-0.5 text-[10px]">茶饮 / 咖啡 / 轻餐</span>
                 </div>
@@ -369,7 +392,10 @@ export default function ScoutBoard() {
 
               <div className="border-t border-border px-4 py-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-[12px] font-semibold">Trade area 空间聚合 <span className="text-[10px] font-normal text-muted-foreground">{radius / 1000} km</span></h3>
+                  <h3 className="text-[12px] font-semibold">
+                    Trade area <span className="text-[10px] font-normal text-muted-foreground">{radius / 1000} km</span>
+                    {ta?.proxy && <span className="ml-1.5 rounded bg-[#6b7280]/25 px-1 py-0.5 text-[9px] font-semibold text-amber-300/90">代理估算</span>}
+                  </h3>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">纳入{ta?.sampledDistricts ?? 0}商圈 · 覆盖{Math.round((ta?.coveredRate ?? 0) * 100)}%</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -413,11 +439,32 @@ export default function ScoutBoard() {
                           <b className="text-right text-[11px] text-foreground">{pct}</b>
                         </div>
                         {meta && (
-                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-[64px] text-[10px] text-muted-foreground">
-                            <span className="text-[#0b6b61]">{meta.source}</span>
-                            <span>· {meta.date}</span>
-                            <span>· 覆盖{meta.coverage}</span>
-                            <span>· 置信 {meta.confidence}</span>
+                          <div className="mt-1 space-y-0.5 pl-[64px] text-[10px] leading-relaxed text-muted-foreground">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span
+                                className={
+                                  meta.status === 'real'
+                                    ? 'rounded px-1 font-semibold text-emerald-300'
+                                    : 'rounded bg-[#6b7280]/25 px-1 font-semibold text-amber-300/90'
+                                }
+                              >
+                                数据状态：{meta.status === 'real' ? '真实数据' : meta.status === 'proxy' ? '🟡 代理/演示模型' : '演示'}
+                              </span>
+                              {meta.status === 'real' ? (
+                                <>
+                                  <span>实际来源 <b className="text-muted-foreground">{meta.actualSource}</b></span>
+                                  <span>· {meta.date}</span>
+                                  <span>· 覆盖{meta.coverage}</span>
+                                  <span>· 置信 {meta.confidence}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>实际来源：<b>暂无（演示）</b></span>
+                                  <span>· 未来来源 {meta.futureSource}</span>
+                                </>
+                              )}
+                            </div>
+                            <div>计算方法：{meta.method}</div>
                           </div>
                         )}
                       </div>
@@ -499,17 +546,27 @@ export default function ScoutBoard() {
                   </span>
                 </div>
                 <div className="grid gap-2">
-                  {selected.sources.map((s, i) => (
-                    <div key={i} className="flex items-start gap-2 text-[11px]">
-                      <span className="mt-0.5 flex h-5 w-14 flex-none items-center justify-center rounded-md bg-muted text-[9px] font-bold text-[#0b6b61]">
-                        {market === 'SG' ? 'SG-DATA' : 'HK-DATA'}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="font-medium">{s.name} <span className="text-[10px] text-muted-foreground">· {s.date}</span></div>
-                        <div className="text-[10px] text-muted-foreground">{s.method}</div>
+                  {Object.entries(selected.indicatorMeta).map(([ck, m]) => {
+                    const lab = THEMES.find((x) => x.key === ck)?.label ?? ck;
+                    return (
+                      <div key={ck} className="flex items-start gap-2 text-[11px]">
+                        <span
+                          className={`mt-0.5 flex h-5 w-14 flex-none items-center justify-center rounded-md text-[9px] font-bold ${
+                            m.status === 'real' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-[#6b7280]/25 text-amber-300/90'
+                          }`}
+                        >
+                          {m.status === 'real' ? 'REAL' : m.status === 'proxy' ? 'PROXY' : 'DEMO'}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            {lab}
+                            <span className="pl-1.5 text-[10px] text-muted-foreground">未来来源 {m.futureSource}</span>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">{m.method}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </>

@@ -174,17 +174,23 @@ export function getTradeArea(market: string, key: string, radiusKm: number): Tra
     sampled++;
     covered += w;
   }
-  // 覆盖率 = 半径内的商圈加权密度 / 全市场商圈合计（作为空间覆盖置信度）
+  const onlySelf = sampled === 1;
   const totalW = all.reduce((s, d) => s + 1, 0);
+  const method =
+    onlySelf && radiusKm > 0
+      ? `以${key}为圆心、${radiusKm}km 内仅覆盖本商圈中心（当前 25 中心点模型粒度，500m–1.5km 无法区分周边差异）；需接入 H3 网格后以圆×网格交叠聚合真实 POI/人口。见：GRIS V1 — Singapore Truth MVP`
+      : `以${key}为圆心、半径${radiusKm}km内的商圈核密度聚合（权重=(1-d/R)²）`;
   return {
     radius: radiusKm,
     population: Math.round(pop),
     traffic: +(trf).toFixed(1),
     competitors: Math.round(comp),
     commercial: Math.round(comm),
-    method: `以${key}为圆心、半径${radiusKm}km内的商圈核密度聚合（权重=(1-d/R)²）`,
+    method,
     sampledDistricts: sampled,
     coveredRate: +Math.min(1, covered / totalW).toFixed(2),
+    sampledCells: 0, // 代理中心点模型无网格落点；接入 H3 后填充真实网格单元数
+    proxy: true,
   };
 }
 
