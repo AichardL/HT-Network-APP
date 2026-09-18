@@ -100,21 +100,37 @@ indicatorMeta/evidence、confidence、rank、active_score）/ candidates / users
 - `generateGrid`：以商圈为影响源做高斯平滑（sigma≈5km），按主题输出全城得分面；
   SG 按真实陆地多边形（SG_POLY + inPoly）裁剪。GridCell.val ∈ [28,98]。
 
-### 城市数据血缘（来源按市场切换）
-- `indicatorMeta[component]` 逐指标含 source/date/method/coverage/confidence（SG=SingStat/LTA/URA/STB，
-  HK=政府统计处/规划署/运输署/MTR/旅发局），**禁止跨市场串源**（公信 HK 必须用 HK 官方源）。
-- 所有人流/客流指标为「代理指标 + 标注来源/置信度」，前端明确标「演示/代理」角标，不冒充真实信令。
+### 城市数据血缘（来源按市场切换，诚实优先）
+- `indicatorMeta[component]` 逐指标含 status(real/proxy)/actualSource(当前实际来源)/futureSource(计划接入的
+  真实来源)/source/date/method/coverage/confidence。**当前全为 status=proxy**：actualSource 为空、
+  method 如实标注「商圈类型预设值 + 确定性扰动」，绝不在 excuse 上假装是官方统计算出来的。
+- SG 指标未来来源=SingStat/LTA/URA/STB，HK=政府统计处/规划署/运输署/MTR/旅发局，**禁止跨市场串源**。
+- 前端按 status 显示「数据状态/实际来源/未来来源/计算方法」证据块；「数据来源」段展示的是**接入蓝图**
+  (PROXY/DEMO + 计划真实源)，不是用真实数据算出的声明。
+- 所有数值为代理/演示 → 不可据此投资；接入真实源后把 status 改 real 并填 actualSource。
+
+### 主题分析（Theme 真切换，非只渲染地图）
+- 主题切换后，右侧大数字与短名单榜单必须用**对应分量**（transit/commercial/young/resident/tourism）在市域内
+  重新排名 —— 用 `themeInfo(d, theme, districts)`（排名对标全量 districts，非被筛选的 filtered）；overall 才用
+  active_score/全局 rank。**禁止**主题下仍显示综合活跃度。
 
 ### API（全部需 Bearer 登录令牌；见 src/app/api/**/route.ts）
-POST /api/auth/login、GET /api/auth/me、GET /api/scout/boot（markets/themes/类型/placesEnabled）、
+POST /api/auth/login、GET /api/auth/me、GET /api/auth/demo（游客直通，GRIS_DEMO_ANON=0 关闭）、GET /api/scout/boot、
 GET /api/scout/districts?market=、GET /api/scout/district/[market]/[key]、
 GET /api/scout/grid?market=&theme=、GET /api/scout/places?q=&lat=&lng=、
 GET /api/scout/tradearea?market=&key=&radius=(km)、GET/POST/DELETE /api/scout/candidates、GET /api/audits。
 
-### Trade Area（真实空间聚合，禁止线性乘法）
-- `scout.computeTradeArea`：以商圈为圆心、半径内周边商圈按权重 (1-d/R)² 做核密度聚合，
-  返回 population/traffic/competitors/commercial + sampledDistricts（半径内实际纳入商圈数）。
-  值随地理分布非线性变化；**严禁**用 `1km 数据 × 0.5/1.5` 线性外推。
+### Trade Area（真实空间聚合，禁止线性乘法；当前如实标注局限）
+- `scout.getTradeArea`：以商圈为圆心、半径内周边商圈按权重 (1-d/R)² 做核密度聚合，返回 population/
+  traffic/competitors/commercial + sampledDistricts/coveredRate + proxy。值随地理分布非线性变化；
+  **严禁**用 `1km 数据 × 0.5/1.5` 线性外推。
+- **已知局限**：底层仅 25 个商圈中心点，当半径内仅覆盖单一中心时（Orchard 500m–1.5km）无法区分周边差异，
+  method 会如实注明需接入 H3 网格（GRIS V1）。不要用更细的伪合成面假装解决——那仍是假数据。
+
+### 审计（audit_log 必须含 ip 列，否则写入静默失败）
+- `audit_log` schema 含 `ip TEXT NOT NULL DEFAULT ''`（老库用 ALTER 迁移），`writeAudit` 写 actor/method/
+  path/status/ip/at 六列。**缺 ip 列时 INSERT 抛错被 catch，审计从不上库**——改 schema 后需删 `data/scout.db`
+  重建，或确认 ALTER 已生效。
 
 ### 默认登录账号
 管理员：`admin` / `gris-admin-2024`（位于 src/lib/auth.ts ADMIN_PASSWORD_HASH，可改）。
