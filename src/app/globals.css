@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
@@ -137,8 +138,6 @@ body {
 }
 
 /* ===== GRIS 茶饮行业网络规划 · 制图风格主题 (Design token) ===== */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
-
 .dark {
   --background: #101014;
   --foreground: #f2efe8;

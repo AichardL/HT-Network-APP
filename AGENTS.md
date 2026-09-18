@@ -108,3 +108,5 @@ POST/GET /api/planning（项目规划）、GET /api/audits（审计日志）。
 - 前端调用一律相对路径 `/api/...`，禁止硬编码域名/localhost。
 - 登录/会话依赖模块级 SECRET 常量，改 auth.ts 会使历史 Cookie 失效（属正常）。
 - 地图为 SVG 归一画布（0..100 坐标），未接第三方地图 key；如需真实底图再引入 map 服务。
+### Tailwind v4 常见坑
+- 在 `globals.css` 里通过 `@import url(...)` 引入 Google Fonts 时，必须把它放在**文件第一行、`@import 'tailwindcss'` 之前**；否则 Tailwind v4 就地展开 `tailwindcss` 后会把字体 `@import` 顶到编译产物中段，触发 `@import rules must precede all rules` 编译失败、页面全部 500。
