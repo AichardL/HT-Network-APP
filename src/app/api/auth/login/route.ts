@@ -9,7 +9,7 @@ export const POST = api(async (req) => {
   const user = credentialUser(username, password);
   if (!user) return NextResponse.json({ error: 'invalid_credentials' }, { status: 401 });
   const token = signToken({ u: user.username, r: user.role, e: Date.now() + 12 * 60 * 60 * 1000 });
-  const res = NextResponse.json({ success: true, user }, { status: 200 });
+  const res = NextResponse.json({ success: true, user, token }, { status: 200 });
   res.cookies.set(AUTH_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',

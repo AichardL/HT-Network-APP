@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export function LoginPanel({ onLogin }: { onLogin: (u: { username: string; role: string }) => void }) {
+export function LoginPanel({ onLogin }: { onLogin: (u: { username: string; role: string }, token: string) => void }) {
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('gris-admin-2024');
   const [error, setError] = useState('');
@@ -27,7 +27,7 @@ export function LoginPanel({ onLogin }: { onLogin: (u: { username: string; role:
         setError(d.error === 'invalid_credentials' ? '账号或密码错误' : '登录失败');
         return;
       }
-      onLogin(d.user);
+      onLogin(d.user, d.token);
     } catch {
       setError('网络错误，请重试');
     } finally {

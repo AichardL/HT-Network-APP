@@ -43,30 +43,59 @@ const NAV = [
   { href: '/audit', label: '审计日志', icon: ScrollText },
 ];
 
+const TOKEN_KEY = 'gris_token';
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<{ username: string; role: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [market, setMarket] = useState<MarketCode>('HK');
+  const [token, setToken] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    const t = typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_KEY) : null;
+    if (t) setToken(t);
+    fetch('/api/auth/me', {
+      headers: t ? { Authorization: `Bearer ${t}` } : {},
+    })
       .then((r) => r.json())
-      .then((d) => setUser(d.user || null))
+      .then((d) => {
+        setUser(d.user || null);
+      })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
-  const api = useCallback(async (path: string, init?: RequestInit) => {
-    return fetch(path, {
-      headers: { 'Content-Type': 'application/json' },
-      ...init,
-    });
-  }, []);
+  const api = useCallback(
+    async (path: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers || {});
+      headers.set('Content-Type', 'application/json');
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      const res = await fetch(path, {
+        credentials: 'same-origin',
+        ...init,
+        headers,
+      });
+      if (res.status === 401) {
+        setToken(null);
+        if (typeof window !== 'undefined') window.localStorage.removeItem(TOKEN_KEY);
+        setUser(null);
+      }
+      if (!res.ok) throw new Error(`request failed: ${res.status}`);
+      return res;
+    },
+    [token],
+  );
 
   const logout = useCallback(async () => {
-    await fetch('/api/auth/me', { method: 'POST' });
+    try {
+      await fetch('/api/auth/me', { method: 'POST' });
+    } catch {
+      // 忽略登出接口异常
+    }
+    setToken(null);
+    if (typeof window !== 'undefined') window.localStorage.removeItem(TOKEN_KEY);
     setUser(null);
     router.push('/');
   }, [router]);
@@ -80,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           载入中…
         </div>
       ) : !user ? (
-        <LoginPanel onLogin={(u) => setUser(u)} />
+        <LoginPanel onLogin={(u, t) => { setUser(u); setToken(t); if (typeof window !== 'undefined') window.localStorage.setItem(TOKEN_KEY, t); }} />
       ) : (
         <div className="flex min-h-screen bg-background">
           <aside className="flex w-60 flex-col border-r border-border bg-sidebar">

@@ -18,8 +18,15 @@ export function parseCookies(req: Request): Record<string, string> {
   return out;
 }
 
+export function readToken(req: Request): string | null {
+  const auth = req.headers.get('authorization') || '';
+  const m = /^Bearer\s+(.+)$/i.exec(auth);
+  if (m && m[1].trim()) return m[1].trim();
+  return parseCookies(req)[AUTH_COOKIE] || null;
+}
+
 export function requireAuth(req: Request): SessionPayload | null {
-  const token = parseCookies(req)[AUTH_COOKIE];
+  const token = readToken(req);
   if (!token) return null;
   return verifyToken(token);
 }

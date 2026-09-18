@@ -110,3 +110,8 @@ POST/GET /api/planning（项目规划）、GET /api/audits（审计日志）。
 - 地图为 SVG 归一画布（0..100 坐标），未接第三方地图 key；如需真实底图再引入 map 服务。
 ### Tailwind v4 常见坑
 - 在 `globals.css` 里通过 `@import url(...)` 引入 Google Fonts 时，必须把它放在**文件第一行、`@import 'tailwindcss'` 之前**；否则 Tailwind v4 就地展开 `tailwindcss` 后会把字体 `@import` 顶到编译产物中段，触发 `@import rules must precede all rules` 编译失败、页面全部 500。
+### 会话鉴权（重要）
+- 登录成功返回 `{success,user,token}`；前端把 token 存 `localStorage['gris_token']`，后续请求通过
+  `Authorization: Bearer <token>` 携带（兼容 iframe 预览，浏览器会屏蔽第三方 iframe 的 cookie，Cookie 已弃为主方案，仅作兜底）。
+- 前端 `api()` 助手：401 时清 token 并回登录页；非 200 时抛错（各页面依赖此行为，勿改成静默放行错误体，否则会出现
+  `Cannot read properties of undefined (reading 'siteCount')` 类崩溃）。

@@ -74,7 +74,7 @@ export default function DashboardPage() {
     load();
   }, [load]);
 
-  if (!data)
+  if (!data || !data.kpi || !data.charts)
     return (
       <div className="grid grid-cols-1 gap-4">
         <Skeleton className="h-28 w-full" />
