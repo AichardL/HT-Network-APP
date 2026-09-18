@@ -1,11 +1,11 @@
 import { getDb } from './db';
-import type { District, GridCell, Market, Candidate } from './scout-types';
+import type { District, GridCell, Market, Candidate, TradeAreaStats } from './scout-types';
 
 // scout 服务层：新加坡（主力，可扩展 HK/BKK/KUL）选址考察的数据访问与网格/评分计算。
 
 const THEMES = ['overall', 'transit', 'commercial', 'young', 'resident', 'tourism'] as const;
 export type Theme = (typeof THEMES)[number];
-export type { District, GridCell, Market, Candidate };
+export type { District, GridCell, Market, Candidate, TradeAreaStats };
 
 export function listMarkets(): Market[] {
   return getDb().prepare('SELECT * FROM markets ORDER BY code').all() as unknown as Market[];
@@ -28,6 +28,12 @@ export function getDistrict(market: string, key: string): District | null {
 }
 
 function parseRow(r: Record<string, unknown>): District {
+  const aud = JSON.parse(r.audience as string) as {
+    identity?: District['identity'];
+    age?: District['age'];
+  };
+  const identity = aud.identity;
+  const age = aud.age;
   return {
     area_key: r.area_key as string,
     name: r.name as string,
@@ -37,9 +43,11 @@ function parseRow(r: Record<string, unknown>): District {
     lng: r.lng as number,
     components: JSON.parse(r.components as string),
     metrics: JSON.parse(r.metrics as string),
-    audience: JSON.parse(r.audience as string),
+    identity: identity || { resident: 40, office: 25, tourist: 15, student: 10, other: 10 },
+    age: age || { a18_24: 25, a25_34: 35, a35_44: 25, a45_plus: 15 },
     confidence: r.confidence as string,
     sources: JSON.parse(r.sources as string),
+    indicatorMeta: JSON.parse(r.indicator_meta as string),
     evidence: JSON.parse(r.evidence as string),
     rank: r.rank as number,
     active_score: r.active_score as number,
@@ -135,6 +143,49 @@ export function generateGrid(market: string, theme: Theme): GridCell[] {
     }
   }
   return cells;
+}
+
+// ---------------- Trade Area 真实空间聚合 ----------------
+// 不再用「1.5km = 1km 值 ×1.5」线性放大。这里以目标商圈为圆心，对半径内实际存在的
+// 周边商圈做地理核密度聚合：单个商圈贡献 = 其指标 × (1 - d/R)²（距离衰减，非线性），
+// 超出半径记为 0。因此覆盖人口/竞品等会随对方位商圈分布非均匀变化（某方向商圈稀薄则增长放缓），
+// 更接近空间统计，而非比例缩放。
+function gkms(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dx = (lng2 - lng1) * 104;
+  const dy = (lat2 - lat1) * 111;
+  return Math.hypot(dx, dy);
+}
+
+export function getTradeArea(market: string, key: string, radiusKm: number): TradeAreaStats | null {
+  const self = getDistrict(market, key);
+  if (!self) return null;
+  const all = listDistricts(market);
+  let pop = 0, trf = 0, comp = 0, comm = 0;
+  let sampled = 0;
+  let covered = 0;
+  for (const d of all) {
+    const dkm = gkms(self.lat, self.lng, d.lat, d.lng);
+    if (dkm > radiusKm) continue;
+    const w = Math.pow(1 - dkm / radiusKm, 2); // 中心最高，边缘为 0
+    pop += d.metrics.population * w;
+    trf += d.metrics.traffic * w;
+    comp += d.metrics.competitors * w;
+    comm += d.metrics.commercial * w;
+    sampled++;
+    covered += w;
+  }
+  // 覆盖率 = 半径内的商圈加权密度 / 全市场商圈合计（作为空间覆盖置信度）
+  const totalW = all.reduce((s, d) => s + 1, 0);
+  return {
+    radius: radiusKm,
+    population: Math.round(pop),
+    traffic: +(trf).toFixed(1),
+    competitors: Math.round(comp),
+    commercial: Math.round(comm),
+    method: `以${key}为圆心、半径${radiusKm}km内的商圈核密度聚合（权重=(1-d/R)²）`,
+    sampledDistricts: sampled,
+    coveredRate: +Math.min(1, covered / totalW).toFixed(2),
+  };
 }
 
 // ---------------- 候选点工作流 ----------------

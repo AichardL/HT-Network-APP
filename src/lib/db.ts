@@ -63,7 +63,8 @@ function ensureSchema(db: Database.Database) {
     metrics TEXT NOT NULL,      -- json {population,traffic,competitors,commercial}
     audience TEXT NOT NULL,     -- json {resident,office,young,tourist} %
     confidence TEXT NOT NULL,   -- A/B/C/D
-    sources TEXT NOT NULL,      -- json [{name,kind,date,method,url}]
+    sources TEXT NOT NULL,      -- json [{name,kind,date,method,url}]（市场维度汇总）
+    indicator_meta TEXT NOT NULL, -- json { <component>: {source,date,method,coverage,confidence} }（每指标血缘）
     evidence TEXT NOT NULL,     -- json [string]
     rank INTEGER NOT NULL,
     active_score REAL NOT NULL,
@@ -103,23 +104,78 @@ function ensureSchema(db: Database.Database) {
   `);
 }
 
-// ---------- 来源（数据溯源，供证据卡展示） ----------
-const SRC = {
-  lta: { name: 'LTA 轨道交通客运量', kind: '官方统计', date: '近月', method: '站点进出站量月度数据', url: 'https://www.lta.gov.sg/' },
-  singstat: { name: 'SingStat 人口与年龄', kind: '官方统计', date: '低频更新', method: '规划区/子区人口结构', url: 'https://www.singstat.gov.sg/' },
-  osm: { name: 'OpenStreetMap 设施/道路', kind: '开放数据', date: '持续更新', method: 'POI 与道路网格', url: 'https://www.openstreetmap.org/' },
-  places: { name: 'Google Places 竞品核验', kind: '地点 API', date: '按需缓存', method: '服务端查询 + 归属展示', url: 'https://maps.google.com/' },
+// ---------- 人群结构模型（两组互斥占比，各自求和=100%，杜绝负数） ----------
+// 说明：身份/到访目的 与 年龄 是两套独立维度，不能用「游客=100%-居民-办公-年轻」反推混算。
+// 两组都用确定性份额归一化（largest-remainder）到 100%，且逐项非负。
+function makeShares(rnd: () => number, anchors: number[]): number[] {
+  const w = anchors.map((a) => Math.max(0.05, a * (0.7 + rnd() * 0.6)));
+  const s = w.reduce((x, y) => x + y, 0);
+  const base = w.map((x) => Math.floor((x / s) * 100));
+  let rem = 100 - base.reduce((a, b) => a + b, 0);
+  const frac = w.map((x, i) => (x / s) * 100 - base[i]);
+  const order = frac.map((f, i) => [f, i] as const).sort((a, b) => b[0] - a[0]);
+  for (let k = 0; rem > 0; k++, rem--) base[order[k % order.length][1]]++;
+  return base;
+}
+
+// （a）身份结构：居民 / 办公 / 游客 / 学生 / 其他 —— 互斥合计100%
+const IDENTITY_ANCHOR: Record<string, number[]> = {
+  //        resident office tourist student other
+  '核心商业': [0.3, 0.36, 0.18, 0.06, 0.1],
+  办公: [0.2, 0.5, 0.08, 0.06, 0.16],
+  社区: [0.55, 0.2, 0.04, 0.08, 0.13],
+  旅游: [0.12, 0.2, 0.54, 0.05, 0.09],
+};
+const IDENTITY_KEYS = ['resident', 'office', 'tourist', 'student', 'other'] as const;
+
+// （b）年龄结构：18-24 / 25-34 / 35-44 / 45+ —— 互斥合计100%
+// 由 young/社区强度插值：年轻商圈偏 18-24/25-34，社区型偏 45+。
+function ageAnchors(young: number, community: number): number[] {
+  return [
+    0.14 + young * 0.26, // 18-24
+    0.24 + young * 0.14, // 25-34
+    0.22 + young * 0.06, // 35-44
+    0.4 - young * 0.14 - community * 0.08, // 45+
+  ];
+}
+
+// ---------- 市场维度数据源（香港/新加坡各自独立的数据血缘） ----------
+type IndicatorMeta = { source: string; date: string; method: string; coverage: string; confidence: string };
+
+// 各城市指标 → 来源映射；date 为相对更新节奏（种子为低频示意，真实接入后按源实况替换）
+const SG_INDICATOR_SRC: Record<string, Omit<IndicatorMeta, 'coverage'>> = {
+  transit: { source: 'LTA 轨道交通 / 公共巴士客运量', date: '提取自 LTA 2024 年度数据集', method: '站点进出站客流 + 巴士走廊断面，归一化到商圈步行距离', confidence: 'B' },
+  commercial: { source: 'URA 商业区划 / OSM 设施密度', date: '2024 年人口普查 + 近期更新', method: '商圈半径内零售/餐饮 POI 核密度', confidence: 'C' },
+  young: { source: 'SingStat 人口与年龄结构', date: '2020 年人口普查 + 常驻估算', method: '20-44 岁人口占比（按规划区）', confidence: 'B' },
+  resident: { source: 'SingStat / HDB 居住人口密度', date: '2020 年人口普查 + 常驻估算', method: '规划区/邻里常住人口密度', confidence: 'B' },
+  tourism: { source: '新加坡旅游局(STB) 到访与停留数据', date: '2023-2024 年度报告', method: '热门旅游吸引点周边到访强度', confidence: 'C' },
+};
+const HK_INDICATOR_SRC: Record<string, Omit<IndicatorMeta, 'coverage'>> = {
+  transit: { source: '运输署 / 港铁(MTR) 站点客流', date: '运输署 2023 年度旅次统计', method: '港铁出入闸 + 车站步行可达范围', confidence: 'B' },
+  commercial: { source: '规划署(PlanD) 用地 / OSM 设施密度', date: '2023 年规划数据 + 近期更新', method: '商圈半径内零售/餐饮 POI 核密度', confidence: 'C' },
+  young: { source: '香港政府统计处 人口年龄结构', date: '2021 年人口普查', method: '20-44 岁人口占比（按分区）', confidence: 'B' },
+  resident: { source: '政府统计处 / 规划署 人口密度', date: '2021 年人口普查', method: '分区常住人口密度', confidence: 'B' },
+  tourism: { source: '香港旅游发展局 访港旅客分布', date: '2023 年度数据', method: '主要旅客吸引点周边到访强度', confidence: 'C' },
 };
 
-// 商圈类型的基础成分锚点（0..1 代理强度），再叠加确定性扰动
-const TYPE_BASE: Record<string, { transit: number; commercial: number; young: number; resident: number; tourism: number }> = {
-  '核心商业': { transit: 0.9, commercial: 0.92, young: 0.8, resident: 0.4, tourism: 0.72 },
-  办公: { transit: 0.8, commercial: 0.6, young: 0.5, resident: 0.3, tourism: 0.4 },
-  社区: { transit: 0.55, commercial: 0.58, young: 0.5, resident: 0.92, tourism: 0.22 },
-  旅游: { transit: 0.62, commercial: 0.72, young: 0.6, resident: 0.25, tourism: 1 },
+// 汇总来源列表（<市>维度 prepend 进去），供证据卡「数据来源」展示
+const METRIC_METHOD: Record<string, string> = {
+  transit: '站点/通道客流等指标',
+  commercial: 'POI 核密度',
+  young: '年龄结构占比',
+  resident: '常住密度',
+  tourism: '到访强度',
+};
+const METRIC_SOURCE_BY_MARKET: Record<string, Record<string, string>> = {
+  SG: {
+    transit: 'LTA', commercial: 'URA / OSM', young: 'SingStat', resident: 'SingStat / HDB', tourism: '新加坡旅游局',
+  },
+  HK: {
+    transit: '运输署 / MTR', commercial: '规划署 / OSM', young: '政府统计处', resident: '政府统计处', tourism: '香港旅发局',
+  },
 };
 
-// 评分公式（方案原文）：综合活跃度 = 0.35*交通 + 0.25*商业 + 0.15*办公教育 + 0.15*居民年轻 + 0.10*游客
+// 评分公式（方案原文）：综合活跃度 = 0.35*交通 + 0.25*商业 + 0.15*年轻客群 + 0.15*社区居住 + 0.10*游客
 function activeScore(c: { transit: number; commercial: number; young: number; resident: number; tourism: number }) {
   return Math.round((0.35 * c.transit + 0.25 * c.commercial + 0.15 * c.young + 0.15 * c.resident + 0.1 * c.tourism) * 100);
 }
@@ -165,7 +221,15 @@ const HK_DISTRICTS: RawDistrict[] = [
   ['tsuenwan', '荃湾 Tsuen Wan', '新界', 22.3707, 114.1135, '社区'],
 ];
 
-function buildDistrict(d: RawDistrict): DistrictSeed {
+// 各商圈类型的基础打分组件（选址代理指标：交通/商业/年轻客群/社区复购/游客）
+const TYPE_BASE: Record<string, { transit: number; commercial: number; young: number; resident: number; tourism: number }> = {
+  '核心商业': { transit: 0.85, commercial: 0.95, young: 0.62, resident: 0.4, tourism: 0.5 },
+  办公: { transit: 0.8, commercial: 0.7, young: 0.52, resident: 0.35, tourism: 0.2 },
+  社区: { transit: 0.5, commercial: 0.6, young: 0.45, resident: 0.85, tourism: 0.15 },
+  旅游: { transit: 0.6, commercial: 0.7, young: 0.3, resident: 0.15, tourism: 0.92 },
+};
+
+function buildDistrict(d: RawDistrict, market: string): DistrictSeed {
   const [key, name, region, lat, lng, type] = d;
   const rnd = mulberry32(key.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0));
   const base = TYPE_BASE[type] || TYPE_BASE['社区'];
@@ -185,22 +249,15 @@ function buildDistrict(d: RawDistrict): DistrictSeed {
   const competitors = Math.round(8 + score * 0.4 + r2() * 14);
   const commercial = Math.round(46 + score * 1.5 + r2() * 30);
   const metrics = { population, traffic, competitors, commercial };
-  const office = Math.min(52, 18 + components.young * 22 + r2() * 14);
-  const young = Math.min(48, 16 + components.young * 20 + r2() * 12);
-  const resident0 = Math.min(55, 20 + components.resident * 30);
-  let tourist = Math.max(0, 100 - office - young - resident0);
-  let resident = resident0;
-  if (tourist < 6) {
-    resident -= 6 - tourist;
-    tourist = 6;
-  }
-  const audience = {
-    resident: Math.round(resident),
-    office: Math.round(office),
-    young: Math.round(young),
-    tourist: Math.round(100 - resident - office - young - (100 - resident - office - young) + tourist),
-  };
-  audience.tourist = Math.round(100 - audience.resident - audience.office - audience.young);
+
+  // （a）身份结构：由商圈类型锚点 + 确定性扰动，归一化到 100%，全非负
+  const idShares = makeShares(rnd, IDENTITY_ANCHOR[type] || IDENTITY_ANCHOR['社区']);
+  const identity = { resident: 0, office: 0, tourist: 0, student: 0, other: 0 };
+  IDENTITY_KEYS.forEach((k, i) => (identity[k] = idShares[i]));
+
+  // （b）年龄结构：由 young/社区强度插值，归一化到 100%，全非负
+  const ageShares = makeShares(rnd, ageAnchors(components.young, components.resident));
+
   const reasons: string[] = [];
   if (components.transit >= 0.75) reasons.push('轨道交通与换乘客流强，适合高频即饮消费');
   else reasons.push('交通条件中等，需核验步行路径与入口可见度');
@@ -208,6 +265,30 @@ function buildDistrict(d: RawDistrict): DistrictSeed {
   else reasons.push('商业密度非主要优势，应更关注社区复购');
   if (components.tourism >= 0.6) reasons.push('旅游吸引点明显，但淡旺季波动需现场验证');
   else reasons.push('游客贡献有限，主要依赖居民与办公客群');
+
+  // （c）每指标血缘：按市场切换来源/方法/日期/置信度
+  const srcTpl = market === 'HK' ? HK_INDICATOR_SRC : SG_INDICATOR_SRC;
+  const covers: Record<string, string> = {
+    transit: '全市轨道/巴士网', commercial: market === 'HK' ? '市区分区' : '新加坡全岛', young: '规划区', resident: '规划区', tourism: '主要旅游吸引点',
+  };
+  const indicatorMeta: Record<string, IndicatorMeta> = {};
+  (['transit', 'commercial', 'young', 'resident', 'tourism'] as const).forEach((c) => {
+    const t = srcTpl[c];
+    indicatorMeta[c] = {
+      source: t.source,
+      date: t.date,
+      method: t.method,
+      coverage: covers[c],
+      confidence: type === '旅游' && c === 'tourism' ? 'C' : t.confidence,
+    };
+  });
+
+  // 汇总来源列表
+  const sourceRows = Object.values(METRIC_SOURCE_BY_MARKET[market]).map((name, i) => {
+    const metricKey = Object.keys(METRIC_SOURCE_BY_MARKET[market])[i];
+    return { name, kind: '官方数据', date: indicatorMeta[metricKey].date, method: METRIC_METHOD[metricKey], url: '' };
+  });
+
   return {
     area_key: key,
     name,
@@ -217,9 +298,11 @@ function buildDistrict(d: RawDistrict): DistrictSeed {
     lng,
     components,
     metrics,
-    audience,
+    identity,
+    age: { a18_24: ageShares[0], a25_34: ageShares[1], a35_44: ageShares[2], a45_plus: ageShares[3] },
     confidence: type === '旅游' ? 'C' : 'B',
-    sources: [SRC.singstat, SRC.lta, SRC.osm, SRC.places],
+    sources: sourceRows,
+    indicatorMeta,
     evidence: reasons,
     active_score: score,
   };
@@ -234,9 +317,11 @@ interface DistrictSeed {
   lng: number;
   components: { transit: number; commercial: number; young: number; resident: number; tourism: number };
   metrics: { population: number; traffic: number; competitors: number; commercial: number };
-  audience: { resident: number; office: number; young: number; tourist: number };
+  identity: { resident: number; office: number; tourist: number; student: number; other: number };
+  age: { a18_24: number; a25_34: number; a35_44: number; a45_plus: number };
   confidence: string;
   sources: { name: string; kind: string; date: string; method: string; url: string }[];
+  indicatorMeta: Record<string, IndicatorMeta>;
   evidence: string[];
   active_score: number;
 }
@@ -252,30 +337,30 @@ function seedIfEmpty(db: Database.Database) {
 
   const insDistrict = db.prepare(
     `INSERT INTO scout_districts
-      (market_code,area_key,name,district_type,region,lat,lng,components,metrics,audience,confidence,sources,evidence,rank,active_score,updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      (market_code,area_key,name,district_type,region,lat,lng,components,metrics,audience,confidence,sources,indicator_meta,evidence,rank,active_score,updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   );
   const insCandidate = db.prepare(
     'INSERT INTO candidates (market_code,area_key,name,lat,lng,note,created_by,saved_at) VALUES (?,?,?,?,?,?,?,?)'
   );
 
-  const sg = SG_DISTRICTS.map(buildDistrict);
+  const sg = SG_DISTRICTS.map((d) => buildDistrict(d, 'SG'));
   sg.sort((a, b) => b.active_score - a.active_score);
   sg.forEach((d, i) => {
     insDistrict.run(
       'SG', d.area_key, d.name, d.district_type, d.region, d.lat, d.lng,
-      JSON.stringify(d.components), JSON.stringify(d.metrics), JSON.stringify(d.audience),
-      d.confidence, JSON.stringify(d.sources), JSON.stringify(d.evidence), i + 1, d.active_score, now
+      JSON.stringify(d.components), JSON.stringify(d.metrics), JSON.stringify({ identity: d.identity, age: d.age }),
+      d.confidence, JSON.stringify(d.sources), JSON.stringify(d.indicatorMeta), JSON.stringify(d.evidence), i + 1, d.active_score, now
     );
   });
 
-  const hk = HK_DISTRICTS.map(buildDistrict);
+  const hk = HK_DISTRICTS.map((d) => buildDistrict(d, 'HK'));
   hk.sort((a, b) => b.active_score - a.active_score);
   hk.forEach((d, i) => {
     insDistrict.run(
       'HK', d.area_key, d.name, d.district_type, d.region, d.lat, d.lng,
-      JSON.stringify(d.components), JSON.stringify(d.metrics), JSON.stringify(d.audience),
-      d.confidence, JSON.stringify(d.sources), JSON.stringify(d.evidence), i + 1, d.active_score, now
+      JSON.stringify(d.components), JSON.stringify(d.metrics), JSON.stringify({ identity: d.identity, age: d.age }),
+      d.confidence, JSON.stringify(d.sources), JSON.stringify(d.indicatorMeta), JSON.stringify(d.evidence), i + 1, d.active_score, now
     );
   });
 

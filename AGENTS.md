@@ -86,19 +86,35 @@
   - `src/lib/api.ts`（鉴权+审计）、`src/lib/auth.ts`（登录令牌，Bearer 优先 / cookie 兜底）。
 
 ### 数据库 Schema（data/scout.db，均为运行时生成，勿提交）
-markets / scout_districts（商圈，含冗余 JSON：components/metrics/audience/sources/evidence、
-confidence、rank、active_score）/ candidates / users / audit_log。
+markets / scout_districts（商圈，含冗余 JSON：components/metrics/identity/age/sources/
+indicatorMeta/evidence、confidence、rank、active_score）/ candidates / users / audit_log。
+
+### 人群结构模型（P0，勿退化）
+- 身份/到访目的（identity：resident/office/tourist/student/other）与 年龄（age：a18_24/a25_34/
+  a35_44/a45_plus）是**两组独立互斥维度**，各自求和=100%、逐项非负（`makeShares` largest-remainder
+  归一化）。
+- **严禁**用「游客=100%-居民-办公-年轻」之类的反推混算——身份与年龄维度不同，会算出负数。
 
 ### 打分与网格
 - 综合分 `composeScore`：0.35 交通 + 0.25 商业 + 0.15 年轻 + 0.15 社区 + 0.10 游客。
 - `generateGrid`：以商圈为影响源做高斯平滑（sigma≈5km），按主题输出全城得分面；
   SG 按真实陆地多边形（SG_POLY + inPoly）裁剪。GridCell.val ∈ [28,98]。
 
+### 城市数据血缘（来源按市场切换）
+- `indicatorMeta[component]` 逐指标含 source/date/method/coverage/confidence（SG=SingStat/LTA/URA/STB，
+  HK=政府统计处/规划署/运输署/MTR/旅发局），**禁止跨市场串源**（公信 HK 必须用 HK 官方源）。
+- 所有人流/客流指标为「代理指标 + 标注来源/置信度」，前端明确标「演示/代理」角标，不冒充真实信令。
+
 ### API（全部需 Bearer 登录令牌；见 src/app/api/**/route.ts）
 POST /api/auth/login、GET /api/auth/me、GET /api/scout/boot（markets/themes/类型/placesEnabled）、
 GET /api/scout/districts?market=、GET /api/scout/district/[market]/[key]、
 GET /api/scout/grid?market=&theme=、GET /api/scout/places?q=&lat=&lng=、
-GET/POST/DELETE /api/scout/candidates、GET /api/audits。
+GET /api/scout/tradearea?market=&key=&radius=(km)、GET/POST/DELETE /api/scout/candidates、GET /api/audits。
+
+### Trade Area（真实空间聚合，禁止线性乘法）
+- `scout.computeTradeArea`：以商圈为圆心、半径内周边商圈按权重 (1-d/R)² 做核密度聚合，
+  返回 population/traffic/competitors/commercial + sampledDistricts（半径内实际纳入商圈数）。
+  值随地理分布非线性变化；**严禁**用 `1km 数据 × 0.5/1.5` 线性外推。
 
 ### 默认登录账号
 管理员：`admin` / `gris-admin-2024`（位于 src/lib/auth.ts ADMIN_PASSWORD_HASH，可改）。
@@ -119,6 +135,7 @@ GET/POST/DELETE /api/scout/candidates、GET /api/audits。
 
 ### 常见问题与预防
 - 改 schema/种子后删 `data/scout.db`（或升 SCHEMA_VERSION）触发重建+重种子；DB 文件勿提交。
+  重建后旧库的 audience 字段（旧 flat 人群）需同步升级为 identity/age 双组，否则 parseRow 解析会错。
 - 前端调用一律相对路径 `/api/...`，禁止硬编码域名/localhost。
 - 令牌由模块级 SECRET 常量签名（auth.ts），改动会使历史令牌失效（正常）。
 - 严禁在 `'use client'`（scout-board / scout-map）import better-sqlite3 或 db.ts/scout.ts；

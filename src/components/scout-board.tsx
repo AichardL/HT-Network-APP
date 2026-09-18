@@ -6,7 +6,7 @@ import {
   Play, Download, Map as MapIcon, Flame, Train, CupSoda, CircleDot, Search, Save, Trash2,
 } from 'lucide-react';
 import { useMarket } from '@/components/app-shell';
-import type { District, Candidate } from '@/lib/scout-types';
+import type { District, Candidate, TradeAreaStats } from '@/lib/scout-types';
 import type { Poi } from '@/lib/sources/places';
 
 const ScoutMap = dynamic(() => import('@/components/map/scout-map'), { ssr: false });
@@ -45,6 +45,7 @@ export default function ScoutBoard() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [placesEnabled, setPlacesEnabled] = useState(false);
   const [note, setNote] = useState('');
+  const [ta, setTa] = useState<TradeAreaStats | null>(null);
   const [loading, setLoading] = useState(true);
   const reqRef = useRef(0);
 
@@ -98,6 +99,21 @@ export default function ScoutBoard() {
     };
   }, [selected, api]);
 
+  useEffect(() => {
+    if (!selected) {
+      setTa(null);
+      return;
+    }
+    let alive = true;
+    api(`/api/scout/tradearea?market=${market}&key=${selected.area_key}&radius=${radius / 1000}`)
+      .then((r) => r.json())
+      .then((d) => alive && setTa((d as { stats: TradeAreaStats }).stats))
+      .catch(() => alive && setTa(null));
+    return () => {
+      alive = false;
+    };
+  }, [selected, radius, market, api]);
+
   const filtered = useMemo(
     () =>
       districts.filter(
@@ -148,8 +164,6 @@ export default function ScoutBoard() {
     a.download = `gris-${market}-${kind}.csv`;
     a.click();
   }
-
-  const f = radius / 1000;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -354,13 +368,16 @@ export default function ScoutBoard() {
               </div>
 
               <div className="border-t border-border px-4 py-3">
-                <h3 className="mb-2 text-[12px] font-semibold">Trade area 概览 <span className="text-[10px] font-normal text-muted-foreground">({radius / 1000} km 估算)</span></h3>
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-[12px] font-semibold">Trade area 空间聚合 <span className="text-[10px] font-normal text-muted-foreground">{radius / 1000} km</span></h3>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">纳入{ta?.sampledDistricts ?? 0}商圈 · 覆盖{Math.round((ta?.coveredRate ?? 0) * 100)}%</span>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    ['覆盖人口', `${(selected.metrics.population * f).toFixed(1)}k`],
-                    ['月交通量·代理', `${(selected.metrics.traffic * f).toFixed(1)}m`],
-                    ['同类竞品', `${Math.round(selected.metrics.competitors * f)}`],
-                    ['商业设施', `${Math.round(selected.metrics.commercial * f)}`],
+                    ['覆盖人口', ta ? `${(ta.population / 1000).toFixed(1)}k` : '…'],
+                    ['月客流·代理', ta ? `${ta.traffic.toFixed(1)}m` : '…'],
+                    ['同类竞品', ta ? `${ta.competitors} 家` : '…'],
+                    ['商业设施', ta ? `${ta.commercial} 处` : '…'],
                   ].map(([k, v]) => (
                     <div key={k} className="rounded-lg border border-border p-2.5">
                       <div className="text-[10px] text-muted-foreground">{k}</div>
@@ -368,26 +385,41 @@ export default function ScoutBoard() {
                     </div>
                   ))}
                 </div>
+                <p className="mt-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                  计算：对半径内周边商圈做距离衰减聚合（权重=(1-d/R)²，非线性），非等比放大。{ta?.method ?? ''}
+                </p>
               </div>
 
               <div className="border-t border-border px-4 py-3">
                 <h3 className="mb-2 text-[12px] font-semibold">评分构成</h3>
                 <div className="grid gap-2">
-                  {[
-                    ['交通', selected.components.transit],
-                    ['商业', selected.components.commercial],
-                    ['年轻客群', selected.components.young],
-                    ['社区消费', selected.components.resident],
-                    ['游客潜力', selected.components.tourism],
-                  ].map(([lab, v]) => {
+                  {([
+                    ['transit', '交通'],
+                    ['commercial', '商业'],
+                    ['young', '年轻客群'],
+                    ['resident', '社区消费'],
+                    ['tourism', '游客潜力'],
+                  ] as const).map(([ck, lab]) => {
+                    const v = selected.components[ck];
                     const pct = Math.round((v as number) * 100);
+                    const meta = selected.indicatorMeta[ck];
                     return (
-                      <div key={lab as string} className="grid grid-cols-[64px_1fr_26px] items-center gap-2 text-[11px] text-muted-foreground">
-                        <span>{lab}</span>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                          <div className="h-full rounded-full bg-[#0b6b61]" style={{ width: `${pct}%` }} />
+                      <div key={ck}>
+                        <div className="grid grid-cols-[64px_1fr_26px] items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>{lab}</span>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                            <div className="h-full rounded-full bg-[#0b6b61]" style={{ width: `${pct}%` }} />
+                          </div>
+                          <b className="text-right text-[11px] text-foreground">{pct}</b>
                         </div>
-                        <b className="text-right text-[11px] text-foreground">{pct}</b>
+                        {meta && (
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-[64px] text-[10px] text-muted-foreground">
+                            <span className="text-[#0b6b61]">{meta.source}</span>
+                            <span>· {meta.date}</span>
+                            <span>· 覆盖{meta.coverage}</span>
+                            <span>· 置信 {meta.confidence}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -395,18 +427,49 @@ export default function ScoutBoard() {
               </div>
 
               <div className="border-t border-border px-4 py-3">
-                <h3 className="mb-2 text-[12px] font-semibold">客群结构 <span className="text-[10px] font-normal text-muted-foreground">身份代理估算</span></h3>
+                <h3 className="mb-2 text-[12px] font-semibold">人群结构 <span className="text-[10px] font-normal text-muted-foreground">两组互斥占比 · 各和=100%</span></h3>
+                <div className="mb-1 text-[11px] font-medium text-muted-foreground">身份 / 到访目的</div>
                 <div className="flex h-3 overflow-hidden rounded-full">
-                  {['resident', 'office', 'young', 'tourist'].map((k, i) => (
-                    <div key={k} style={{ width: `${selected.audience[k] || 0}%`, background: ['#0b6b61', '#6f80d4', '#f1bd42', '#ed6c5c'][i] }} />
+                  {[
+                    ['resident', '#0b6b61'],
+                    ['office', '#6f80d4'],
+                    ['tourist', '#f1bd42'],
+                    ['student', '#119485'],
+                    ['other', '#92919c'],
+                  ].map(([k, c]) => (
+                    <div key={k} style={{ width: `${selected.identity[k as keyof typeof selected.identity] || 0}%`, background: c }} />
                   ))}
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] text-muted-foreground">
+                <div className="mt-1.5 grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
                   {[
-                    ['居民', selected.audience.resident],
-                    ['办公', selected.audience.office],
-                    ['年轻', selected.audience.young],
-                    ['游客', selected.audience.tourist],
+                    ['居民', selected.identity.resident],
+                    ['办公', selected.identity.office],
+                    ['游客', selected.identity.tourist],
+                    ['学生', selected.identity.student],
+                    ['其他', selected.identity.other],
+                  ].map(([k, v]) => (
+                    <div key={k as string} className="flex justify-between">
+                      <span>{k}</span><b className="text-foreground">{v}%</b>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 mb-1 text-[11px] font-medium text-muted-foreground">年龄结构</div>
+                <div className="flex h-3 overflow-hidden rounded-full">
+                  {[
+                    ['a18_24', '#119485'],
+                    ['a25_34', '#0b6b61'],
+                    ['a35_44', '#6f80d4'],
+                    ['a45_plus', '#f1bd42'],
+                  ].map(([k, c]) => (
+                    <div key={k} style={{ width: `${selected.age[k as keyof typeof selected.age] || 0}%`, background: c }} />
+                  ))}
+                </div>
+                <div className="mt-1.5 grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
+                  {[
+                    ['18-24', selected.age.a18_24],
+                    ['25-34', selected.age.a25_34],
+                    ['35-44', selected.age.a35_44],
+                    ['45+', selected.age.a45_plus],
                   ].map(([k, v]) => (
                     <div key={k as string} className="flex justify-between">
                       <span>{k}</span><b className="text-foreground">{v}%</b>
@@ -429,7 +492,7 @@ export default function ScoutBoard() {
 
               <div className="border-t border-border px-4 py-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-[12px] font-semibold">数据来源</h3>
+                  <h3 className="text-[12px] font-semibold">数据来源（{market}）</h3>
                   <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                     {placesEnabled ? <Play className="h-3 w-3 text-emerald-500" /> : <CircleDot className="h-3 w-3 text-yellow-500" />}
                     {placesEnabled ? '实时数据' : '代理指标演示'}
@@ -438,8 +501,8 @@ export default function ScoutBoard() {
                 <div className="grid gap-2">
                   {selected.sources.map((s, i) => (
                     <div key={i} className="flex items-start gap-2 text-[11px]">
-                      <span className="mt-0.5 flex h-5 w-8 flex-none items-center justify-center rounded-md bg-muted text-[9px] font-bold text-[#0b6b61]">
-                        {s.kind === '官方统计' ? 'STAT' : s.kind === '开放数据' ? 'OSM' : 'API'}
+                      <span className="mt-0.5 flex h-5 w-14 flex-none items-center justify-center rounded-md bg-muted text-[9px] font-bold text-[#0b6b61]">
+                        {market === 'SG' ? 'SG-DATA' : 'HK-DATA'}
                       </span>
                       <div className="min-w-0">
                         <div className="font-medium">{s.name} <span className="text-[10px] text-muted-foreground">· {s.date}</span></div>
