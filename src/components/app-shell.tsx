@@ -46,15 +46,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const t = typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_KEY) : null;
-    if (t) setToken(t);
-    fetch('/api/auth/me', {
-      headers: t ? { Authorization: `Bearer ${t}` } : {},
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        setUser(d.user || null);
-      })
+    (async () => {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_KEY) : null;
+      if (stored) {
+        try {
+          const r = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${stored}` } });
+          const d = await r.json();
+          if (d.user) {
+            setToken(stored);
+            setUser(d.user);
+            return;
+          }
+        } catch {
+          /* 旧令牌失效则走游客直通 */
+        }
+        window.localStorage.removeItem(TOKEN_KEY);
+      }
+      try {
+        const r = await fetch('/api/auth/demo');
+        const d = await r.json();
+        if (r.ok && d.token && d.user) {
+          window.localStorage.setItem(TOKEN_KEY, d.token);
+          setToken(d.token);
+          setUser(d.user);
+          return;
+        }
+      } catch {
+        /* GRIS_DEMO_ANON=0 或网络异常时回退到登录页 */
+      }
+      setUser(null);
+    })()
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);

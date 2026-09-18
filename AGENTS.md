@@ -149,3 +149,7 @@ GET /api/scout/tradearea?market=&key=&radius=(km)、GET/POST/DELETE /api/scout/c
   `Authorization: Bearer <token>` 携带（兼容 iframe 预览，浏览器会屏蔽第三方 iframe 的 cookie，Cookie 已弃为主方案，仅作兜底）。
 - 前端 `api()` 助手：401 时清 token 并回登录页；非 200 时抛错（各页面依赖此行为，勿改成静默放行错误体，否则会出现
   `Cannot read properties of undefined (reading 'siteCount')` 类崩溃）。
+- **游客直通演示会话**（`GET /api/auth/demo`）：无有效会话时前端自动拉起，签发 role=`demo` 的免密 token 直通进入，跳过登录页。
+  仅用于演示预览；`GRIS_DEMO_ANON=0` 环境变量可关闭（此时回落 LoginPanel）。正式产品应关闭游客直通、改用邀请制。
+- **环境变量**：`GRIS_AUTH_SECRET`(令牌签名，改动使历史令牌失效) / `GOOGLE_PLACES_API_KEY`(配后 Places 走真实数据，未配自动演示降级) /
+  `GRIS_DEMO_ANON`(1 默认开=游客直通，0=关闭强制登录)。清单见 `.env.example`。
