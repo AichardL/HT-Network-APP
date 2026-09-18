@@ -7,6 +7,8 @@ import 'leaflet/dist/leaflet.css';
 import type { District, GridCell } from '@/lib/scout-types';
 import type { Poi } from '@/lib/sources/places';
 
+export type MapView = { bbox: { minLat: number; maxLat: number; minLng: number; maxLng: number }; zoom: number };
+
 // 新加坡地铁枢纽（演示交通图层；生产接入 LTA 数据）
 const MRT_SG: [string, number, number][] = [
   ['Orchard', 1.3043, 103.832],
@@ -68,6 +70,7 @@ interface Props {
   market: string;
   cells: GridCell[];
   mode: 'grid' | 'heat';
+  heat: { lat: number; lng: number; intensity: number }[];
   districts: District[];
   selected: District | null;
   focus: { lat: number; lng: number; radius: number } | null;
@@ -78,6 +81,7 @@ interface Props {
   pois: Poi[];
   onSelect: (d: District) => void;
   onPlainClick: (latlng: { lat: number; lng: number }) => void;
+  onViewChange?: (v: MapView) => void;
 }
 
 function ClickCatcher({ onPlainClick }: { onPlainClick: Props['onPlainClick'] }) {
@@ -86,6 +90,29 @@ function ClickCatcher({ onPlainClick }: { onPlainClick: Props['onPlainClick'] })
       onPlainClick({ lat: e.latlng.lat, lng: e.latlng.lng });
     },
   });
+  return null;
+}
+
+function ViewReporter({ onViewChange }: { onViewChange?: Props['onViewChange'] }) {
+  const map = useMap();
+  const report = () => {
+    if (!onViewChange) return;
+    const b = map.getBounds();
+    onViewChange({
+      bbox: { minLat: b.getSouth(), maxLat: b.getNorth(), minLng: b.getWest(), maxLng: b.getEast() },
+      zoom: Math.round(map.getZoom()),
+    });
+  };
+  useEffect(() => {
+    report();
+    map.on('moveend', report);
+    map.on('zoomend', report);
+    return () => {
+      map.off('moveend', report);
+      map.off('zoomend', report);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onViewChange]);
   return null;
 }
 
@@ -101,27 +128,39 @@ export default function ScoutMap(p: Props) {
     >
       <FitView market={p.market} />
       <ClickCatcher onPlainClick={p.onPlainClick} />
+      <ViewReporter onViewChange={p.onViewChange} />
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; OpenStreetMap'
       />
-      {/* 数据网格 / 热力 */}
-      {p.cells.map((c, i) =>
-        p.mode === 'grid' ? (
+      {/* 数据网格 / 街道热力（heat 按 bbox+zoom 懒加载） */}
+      {p.mode === 'grid' ? (
+        p.cells.map((c, i) => (
           <CircleMarker
             key={i}
             center={[c.lat, c.lng]}
             radius={8}
             pathOptions={{ color: '#ffffff', weight: 0.6, fillColor: colorFor(c.val), fillOpacity: 0.6 }}
           />
-        ) : (
+        ))
+      ) : p.heat.length ? (
+        p.heat.map((h, i) => (
+          <Circle
+            key={i}
+            center={[h.lat, h.lng]}
+            radius={700}
+            pathOptions={{ color: 'transparent', fillColor: colorFor(28 + h.intensity * 70), fillOpacity: 0.06 + h.intensity * 0.32 }}
+          />
+        ))
+      ) : (
+        p.cells.map((c, i) => (
           <Circle
             key={i}
             center={[c.lat, c.lng]}
             radius={1000}
             pathOptions={{ color: 'transparent', fillColor: colorFor(c.val), fillOpacity: 0.1 + c.val / 420 }}
           />
-        ),
+        ))
       )}
       {/* 地铁枢纽 */}
       {p.showTransit &&

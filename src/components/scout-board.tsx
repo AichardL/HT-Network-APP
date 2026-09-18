@@ -49,7 +49,7 @@ function themeInfo(
 export default function ScoutBoard() {
   const { market, api } = useMarket();
   const [theme, setTheme] = useState('overall');
-  const [mode, setMode] = useState<'grid' | 'heat'>('grid');
+  const [mode, setMode] = useState<'grid' | 'heat'>('heat');
   const [radius, setRadius] = useState(1000);
   const [typeFilter, setTypeFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -59,6 +59,10 @@ export default function ScoutBoard() {
 
   const [districts, setDistricts] = useState<District[]>([]);
   const [cells, setCells] = useState<{ lat: number; lng: number; val: number }[]>([]);
+  const [heat, setHeat] = useState<{ lat: number; lng: number; intensity: number }[]>([]);
+  const [heatMode, setHeatMode] = useState<'real' | 'demo'>('demo');
+  const [view, setView] = useState<{ bbox: { minLat: number; maxLat: number; minLng: number; maxLng: number }; zoom: number } | null>(null);
+  const [viewNonce, setViewNonce] = useState(0);
   const [selected, setSelected] = useState<District | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lng: number; radius: number } | null>(null);
   const [focusRadius, setFocusRadius] = useState(1);
@@ -150,6 +154,34 @@ export default function ScoutBoard() {
       alive = false;
     };
   }, [market, theme, api]);
+
+  const handleView = useCallback((v: { bbox: { minLat: number; maxLat: number; minLng: number; maxLng: number }; zoom: number }) => {
+    setView(v);
+    setViewNonce((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    if (mode !== 'heat' || !view) return;
+    let alive = true;
+    const b = view.bbox;
+    const t = setTimeout(() => {
+      api(
+        `/api/scout/heat?market=${market}&zoom=${view.zoom}&theme=${theme}&minLat=${b.minLat}&maxLat=${b.maxLat}&minLng=${b.minLng}&maxLng=${b.maxLng}`,
+      )
+        .then((r) => r.json())
+        .then((d) => {
+          if (alive) {
+            setHeat((d as { points: { lat: number; lng: number; intensity: number }[]; provider: 'real' | 'demo' }).points);
+            setHeatMode((d as { provider: 'real' | 'demo' }).provider);
+          }
+        })
+        .catch(() => alive && setHeat([]));
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [mode, view, viewNonce, market, theme, api]);
 
   useEffect(() => {
     if (!selected) return;
@@ -364,6 +396,7 @@ export default function ScoutBoard() {
             market={market}
             cells={cells}
             mode={mode}
+            heat={heat}
             districts={districts}
             selected={selected}
             focus={
@@ -378,12 +411,13 @@ export default function ScoutBoard() {
             pois={pois}
             onSelect={pick}
             onPlainClick={handlePlainClick}
+            onViewChange={handleView}
           />
           <div className="pointer-events-none absolute left-3 bottom-3 z-[600] rounded-lg bg-black/70 px-3 py-2 text-[10px] leading-relaxed text-white">
             <b>{market === 'SG' ? '新加坡 · 全城扫描' : '香港 · 全城扫描'}</b>
             <br />
-            {mode === 'grid' ? '数据网格' : '街道热力'} · {THEMES.find((t) => t.key === theme)?.label} ·{' '}
-            {statusInfo?.data_mode === 'truth' ? '真实数据' : '🔶 演示/代理数据'}
+            {mode === 'grid' ? '数据网格' : '街道热力（按视野懒加载）'} · {THEMES.find((t) => t.key === theme)?.label} ·{' '}
+            {heatMode === 'real' ? '真实热流' : statusInfo?.data_mode === 'truth' ? '真实数据' : '🔶 演示/代理数据'}
           </div>
           <div className="pointer-events-none absolute left-3 top-3 z-[600] flex items-center gap-2 rounded-lg bg-white/85 px-3 py-1.5 text-[11px] font-semibold">
             <CircleDot className="h-3.5 w-3.5 text-[#0b6b61]" />

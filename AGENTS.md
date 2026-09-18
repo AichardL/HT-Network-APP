@@ -166,8 +166,12 @@ GET /api/scout/tradearea?market=&key=&radius=(km)、GET/POST/DELETE /api/scout/c
   `/api/scout/point?lat&lng`、`/api/scout/catchment?lat&lng&radius`。
 - **前端**：scout-board 默认走 `数据状态`(data-status pill) + 地图空白处点击 → 任意点分析面板
   （point 分量估值 + catchment 半径 0.5/1/1.5km 切换 + 诚实 method 提示）；map 新增
-  `onPlainClick` + `focus` 圆环（scout-map ClickCatcher）。地图热力仍由 `/api/scout/grid` 的
-  district 扩散面渲染（`/api/scout/heat` 已就绪未接线到地图——下一步把地图 cells 改按 bbox+zoom 拉取 heat）。
+  `onPlainClick` + `focus` 圆环、`onViewChange`（scout-map ClickCatcher + ViewReporter）。
+  **街道热力已接线**：mode 默认 `heat`，`ViewReporter` 上报 bbox+zoom（防抖 250ms）→
+  `/api/scout/heat` 懒加载，带宽随 zoom（`bandwidthForZoom`）缩放；`provider`(real/demo) 显示在左下角。
+- **Places 网络降级**：`GOOGLE_PLACES_API_KEY` 配了且外网可达 → 真实 Nearby Search（real:true）；
+  若 `fetch` 抛错（如沙箱无外网 egress）会 **catch 后回退演示**（real:false），不再 500。
+  即：key 必须部署在有外网访问 Google 的环境才生效，沙箱预览只能得到演示分级竞品。
 - **数据源 key**：`GOOGLE_PLACES_API_KEY`（用户将提供）、`GRIS_LTA_ACCOUNT_KEY`、`GRIS_ONEMAP_TOKEN`
   ≈ LTA/OneMap/SingStat 接入位；未配则全部 unavailable + honest note。**禁止跨城市串源。**
 

@@ -25,23 +25,28 @@ export function placesEnabled(): boolean {
 }
 
 export async function nearbyCompetitors(q: string, lat: number, lng: number, radius = 800): Promise<Poi[]> {
-  const key = process.env.GOOGLE_PLACES_API_KEY;
+  const key = process.env.GOOGLE_PLACES_API_KEY as string | undefined;
   if (!key) return fixture(q, lat, lng);
 
   const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat.toFixed(5)},${lng.toFixed(5)}&radius=${radius}&keyword=${encodeURIComponent(q)}&key=${key}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) return fixture(q, lat, lng);
-  const data = (await res.json()) as { results?: PlacesItem[] };
-  const list = data.results ?? [];
-  const out: Poi[] = list.slice(0, 24).map((r) => ({
-    name: r.name || q,
-    lat: r.geometry?.location?.lat ?? lat,
-    lng: r.geometry?.location?.lng ?? lng,
-    category: q,
-    real: true,
-    source: 'Google Places',
-  }));
-  return out.length ? out : fixture(q, lat, lng);
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return fixture(q, lat, lng);
+    const data = (await res.json()) as { results?: PlacesItem[] };
+    const list = data.results ?? [];
+    const out: Poi[] = list.slice(0, 24).map((r) => ({
+      name: r.name || q,
+      lat: r.geometry?.location?.lat ?? lat,
+      lng: r.geometry?.location?.lng ?? lng,
+      category: q,
+      real: true,
+      source: 'Google Places',
+    }));
+    return out.length ? out : fixture(q, lat, lng);
+  } catch {
+    // 无外网（沙箱预览）时诚实降级为演示；部署到有外网环境后自动走真实
+    return fixture(q, lat, lng);
+  }
 }
 
 // 演示降级：围绕目标点生成周边竞品，明确标注"演示"。
