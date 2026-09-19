@@ -33,7 +33,7 @@ const CENTERS: Record<string, [number, number]> = {
 };
 
 export function colorFor(v: number): string {
-  return v >= 86 ? '#df4f51' : v >= 76 ? '#ee8a57' : v >= 64 ? '#f0c859' : v >= 50 ? '#72b99f' : '#4cafa0';
+  return v >= 86 ? '#111111' : v >= 76 ? '#374151' : v >= 64 ? '#6b7280' : v >= 50 ? '#9ca3af' : '#d4d4d8';
 }
 
 const rankPin = (rank: number, active: boolean) =>
@@ -41,19 +41,19 @@ const rankPin = (rank: number, active: boolean) =>
     className: '',
     iconSize: [30, 36],
     iconAnchor: [15, 31],
-    html: `<div style="width:28px;height:28px;border-radius:9px 9px 9px 2px;display:grid;place-items:center;font-weight:900;font-size:11px;transform:rotate(-45deg);${active ? 'background:#0b6b61;color:#fff;border:2px solid #fff' : 'background:#fff;border:2px solid #0b6b61;color:#0b6b61'}"><span style="transform:rotate(45deg)">${rank}</span></div>`,
+    html: `<div style="width:28px;height:28px;border-radius:9px 9px 9px 2px;display:grid;place-items:center;font-weight:900;font-size:11px;transform:rotate(-45deg);${active ? 'background:#111111;color:#fff;border:2px solid #fff' : 'background:#fff;border:2px solid #111111;color:#111111'}"><span style="transform:rotate(45deg)">${rank}</span></div>`,
   });
 
 const mrtIcon = L.divIcon({
   className: '',
   iconSize: [20, 20],
-  html: '<div style="width:20px;height:20px;border-radius:6px;background:#fff;border:2px solid #6f80d4;display:grid;place-items:center;color:#5368c6;font-size:9px;font-weight:900">M</div>',
+  html: '<div style="width:20px;height:20px;border-radius:6px;background:#fff;border:2px solid #111111;display:grid;place-items:center;color:#111111;font-size:9px;font-weight:900">M</div>',
 });
 
 const poiIcon = L.divIcon({
   className: '',
   iconSize: [11, 11],
-  html: '<div style="width:11px;height:11px;border-radius:50%;background:#20354b;border:2px solid #fff"></div>',
+  html: '<div style="width:11px;height:11px;border-radius:50%;background:#111111;border:2px solid #fff"></div>',
 });
 
 function FitView({ market }: { market: string }) {
@@ -123,7 +123,7 @@ export default function ScoutMap(p: Props) {
       zoom={p.market === 'SG' ? 11 : 10}
       zoomControl={false}
       preferCanvas
-      style={{ height: '100%', width: '100%', background: '#dfe9e5' }}
+      style={{ height: '100%', width: '100%', background: '#f3f4f6' }}
       attributionControl
     >
       <FitView market={p.market} />
@@ -178,7 +178,7 @@ export default function ScoutMap(p: Props) {
         <Circle
           center={[p.selected.lat, p.selected.lng]}
           radius={p.radius}
-          pathOptions={{ color: '#0b6b61', weight: 2, dashArray: '7 6', fillColor: '#30a896', fillOpacity: 0.07 }}
+          pathOptions={{ color: '#111111', weight: 2, dashArray: '7 6', fillColor: '#111111', fillOpacity: 0.07 }}
         />
       )}
       {/* 任意点分析 focus（点 + catchment 圆环） */}
@@ -186,14 +186,14 @@ export default function ScoutMap(p: Props) {
         <Circle
           center={[p.focus.lat, p.focus.lng]}
           radius={Math.max(2, p.focus.radius / 2)}
-          pathOptions={{ color: '#e0a458', weight: 3, fillColor: '#e0a458', fillOpacity: 0.25 }}
+          pathOptions={{ color: '#111111', weight: 3, fillColor: '#111111', fillOpacity: 0.12 }}
         />
       )}
       {p.focus && (
         <Circle
           center={[p.focus.lat, p.focus.lng]}
           radius={p.focus.radius}
-          pathOptions={{ color: '#e0a458', weight: 2, dashArray: '5 5', fillColor: '#30a896', fillOpacity: 0.06 }}
+          pathOptions={{ color: '#111111', weight: 2, dashArray: '5 5', fillColor: '#111111', fillOpacity: 0.06 }}
         />
       )}
       {/* 商圈短名单点位 */}

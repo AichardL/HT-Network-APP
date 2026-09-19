@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-h-screen bg-background">
           <aside className="flex w-60 flex-col border-r border-border bg-sidebar">
             <div className="flex items-center gap-2.5 px-5 py-5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#e0a458] text-[#17120a]">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#111111] text-white">
                 <CupSoda className="h-5 w-5" strokeWidth={1.8} />
               </div>
               <div className="leading-tight">
@@ -145,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     href={item.href}
                     className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors ${
                       active
-                        ? 'bg-sidebar-accent text-[#e0a458]'
+                        ? 'bg-[#111111] text-white'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent/60'
                     }`}
                   >
@@ -177,7 +177,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     key={m}
                     onClick={() => setMarket(m)}
                     className={`rounded-md px-3 py-1 text-xs transition-colors ${
-                      market === m ? 'bg-[#e0a458] text-[#17120a] font-semibold' : 'text-muted-foreground hover:text-foreground'
+                      market === m ? 'bg-[#111111] text-white font-semibold' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {m === 'HK' ? '香港' : '新加坡'}

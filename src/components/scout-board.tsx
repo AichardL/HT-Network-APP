@@ -22,10 +22,10 @@ const THEMES = [
 ];
 
 const TYPE_COLORS: Record<string, string> = {
-  '核心商业': '#0b6b61',
-  办公: '#6f80d4',
-  社区: '#119485',
-  旅游: '#f1bd42',
+  '核心商业': '#111111',
+  办公: '#3f3f46',
+  社区: '#6b7280',
+  旅游: '#9ca3af',
 };
 
 // 主题 → 分量：主题分析应使用对应分量的原始强度（0-100），并在市域内重排，而非一直用综合活跃度/全局排名
@@ -270,7 +270,7 @@ export default function ScoutBoard() {
               key={m}
               onClick={() => setMode(m)}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors ${
-                mode === m ? 'bg-[#e0a458] text-[#17120a] font-semibold' : 'text-muted-foreground'
+                mode === m ? 'bg-[#111111] text-[#ffffff] font-semibold' : 'text-muted-foreground'
               }`}
             >
               {m === 'grid' ? <MapIcon className="h-3.5 w-3.5" /> : <Flame className="h-3.5 w-3.5" />}
@@ -284,7 +284,7 @@ export default function ScoutBoard() {
               key={t.key}
               onClick={() => setTheme(t.key)}
               className={`rounded-md px-2.5 py-1.5 text-xs transition-colors ${
-                theme === t.key ? 'bg-[#e0a458] text-[#17120a] font-semibold' : 'text-muted-foreground'
+                theme === t.key ? 'bg-[#111111] text-[#ffffff] font-semibold' : 'text-muted-foreground'
               }`}
             >
               {t.label}
@@ -298,13 +298,13 @@ export default function ScoutBoard() {
               <button
                 key={r}
                 onClick={() => setRadius(r)}
-                className={`rounded-md px-2 py-1 text-[11px] ${radius === r ? 'bg-[#e0a458] text-[#17120a] font-semibold' : 'text-muted-foreground'}`}
+                className={`rounded-md px-2 py-1 text-[11px] ${radius === r ? 'bg-[#111111] text-[#ffffff] font-semibold' : 'text-muted-foreground'}`}
               >
                 {r >= 1000 ? `${r / 1000}km` : `${r}m`}
               </button>
             ))}
           </div>
-          <button onClick={() => exportCsv('shortlist')} className="flex items-center gap-1.5 rounded-md bg-[#e0a458] px-3 py-1.5 text-xs font-semibold text-[#17120a]">
+          <button onClick={() => exportCsv('shortlist')} className="flex items-center gap-1.5 rounded-md bg-[#111111] px-3 py-1.5 text-xs font-semibold text-[#ffffff]">
             <Download className="h-3.5 w-3.5" /> 导出短名单
           </button>
         </div>
@@ -316,14 +316,14 @@ export default function ScoutBoard() {
           <div className="border-b border-border px-4 py-3">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">地图图层</div>
             {[
-              { k: 'transit', on: showTransit, set: setShowTransit, label: '地铁枢纽', color: '#6f80d4' },
-              { k: 'pois', on: showPois, set: setShowPois, label: '茶饮 / 咖啡竞品', color: '#20354b' },
-              { k: 'shortlist', on: showShortlist, set: setShowShortlist, label: '候选商圈', color: '#0b6b61' },
+              { k: 'transit', on: showTransit, set: setShowTransit, label: '地铁枢纽', color: '#3f3f46' },
+              { k: 'pois', on: showPois, set: setShowPois, label: '茶饮 / 咖啡竞品', color: '#111111' },
+              { k: 'shortlist', on: showShortlist, set: setShowShortlist, label: '候选商圈', color: '#111111' },
             ].map((l) => (
               <label key={l.k} className="flex cursor-pointer items-center gap-2 py-1.5 text-[13px]">
                 <span className="h-2 w-2 rounded-[3px]" style={{ background: l.color }} />
                 <span className="flex-1">{l.label}</span>
-                <input type="checkbox" checked={l.on} onChange={(e) => l.set(e.target.checked)} className="h-4 w-4 accent-[#e0a458]" />
+                <input type="checkbox" checked={l.on} onChange={(e) => l.set(e.target.checked)} className="h-4 w-4 accent-[#111111]" />
               </label>
             ))}
             <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -340,7 +340,7 @@ export default function ScoutBoard() {
                   key={t}
                   onClick={() => setTypeFilter(t)}
                   className={`rounded-full px-2.5 py-1 text-[11px] ${
-                    typeFilter === t ? 'bg-[#20354b] text-white' : 'border border-border text-muted-foreground'
+                    typeFilter === t ? 'bg-[#111111] text-white' : 'border border-border text-muted-foreground'
                   }`}
                 >
                   {t === 'all' ? '全部' : t}
@@ -356,7 +356,7 @@ export default function ScoutBoard() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="搜索商圈…"
-                className="h-8 flex-1 rounded-md border border-border bg-muted/40 px-2.5 text-xs outline-none focus:border-[#e0a458]"
+                className="h-8 flex-1 rounded-md border border-border bg-muted/40 px-2.5 text-xs outline-none focus:border-[#111111]"
               />
             </div>
             <div className="mb-2 flex items-center justify-between text-[12px]">
@@ -369,12 +369,12 @@ export default function ScoutBoard() {
                   key={d.area_key}
                   onClick={() => pick(d)}
                   className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors ${
-                    selected?.area_key === d.area_key ? 'border-[#e0a458] bg-[#e0a458]/10' : 'border-transparent hover:bg-muted/50'
+                    selected?.area_key === d.area_key ? 'border-[#111111] bg-[#111111]/10' : 'border-transparent hover:bg-muted/50'
                   }`}
                 >
                   <span
                     className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-bold text-white"
-                    style={{ background: selected?.area_key === d.area_key ? '#0b6b61' : TYPE_COLORS[d.district_type] || '#6f80d4' }}
+                    style={{ background: selected?.area_key === d.area_key ? '#111111' : TYPE_COLORS[d.district_type] || '#3f3f46' }}
                   >
                     {themeInfo(d, theme, districts).rank}
                   </span>
@@ -382,7 +382,7 @@ export default function ScoutBoard() {
                     <span className="block truncate text-[12px] font-medium">{d.name}</span>
                     <span className="block text-[10px] text-muted-foreground">{d.district_type} · {d.region}</span>
                   </span>
-                  <span className="font-num text-[13px] font-bold text-[#0b6b61]">{themeInfo(d, theme, districts).score}</span>
+                  <span className="font-num text-[13px] font-bold text-[#111111]">{themeInfo(d, theme, districts).score}</span>
                 </button>
               ))}
               {!filtered.length && <div className="py-8 text-center text-xs text-muted-foreground">无匹配商圈</div>}
@@ -391,7 +391,7 @@ export default function ScoutBoard() {
         </aside>
 
         {/* 中栏：地图 */}
-        <section className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-[#dfe9e5]">
+        <section className="relative min-h-0 overflow-hidden rounded-xl border border-border bg-[#f3f4f6]">
           <ScoutMap
             market={market}
             cells={cells}
@@ -420,7 +420,7 @@ export default function ScoutBoard() {
             {heatMode === 'real' ? '真实热流' : statusInfo?.data_mode === 'truth' ? '真实数据' : '🔶 演示/代理数据'}
           </div>
           <div className="pointer-events-none absolute left-3 top-3 z-[600] flex items-center gap-2 rounded-lg bg-white/85 px-3 py-1.5 text-[11px] font-semibold">
-            <CircleDot className="h-3.5 w-3.5 text-[#0b6b61]" />
+            <CircleDot className="h-3.5 w-3.5 text-[#111111]" />
             {selected ? selected.name : focus ? '任意点分析（点击查看）' : '点击商圈点位查看证据卡 · 点击空处任意点分析'}
           </div>
         </section>
@@ -445,7 +445,7 @@ export default function ScoutBoard() {
                   {(['transit', 'commercial', 'young', 'resident', 'tourism'] as const).map((k) => (
                     <div key={k} className="rounded-lg bg-muted/50 p-2.5">
                       <div className="text-[10px] text-muted-foreground">{THEMES.find((t) => t.key === k)?.label}</div>
-                      <div className="font-num text-lg font-bold text-[#0b6b61]">{focusData.point.cell?.values?.[k] ?? 0}</div>
+                      <div className="font-num text-lg font-bold text-[#111111]">{focusData.point.cell?.values?.[k] ?? 0}</div>
                     </div>
                   ))}
                   <div className="col-span-2 rounded-lg bg-muted/50 p-2.5 text-[10px] text-muted-foreground">
@@ -465,7 +465,7 @@ export default function ScoutBoard() {
                       <button
                         key={r}
                         onClick={() => setFocusRadius(r)}
-                        className={`rounded-md border px-2 py-0.5 text-[10px] ${focusRadius === r ? 'border-[#e0a458] bg-[#e0a458]/10 text-[#0b6b61]' : 'border-border text-muted-foreground'}`}
+                        className={`rounded-md border px-2 py-0.5 text-[10px] ${focusRadius === r ? 'border-[#111111] bg-[#111111]/10 text-[#111111]' : 'border-border text-muted-foreground'}`}
                       >
                         {r}km
                       </button>
@@ -488,7 +488,7 @@ export default function ScoutBoard() {
                   </div>
                   <button
                     onClick={refetchFocus}
-                    className="mt-2 w-full rounded-md border border-[#0b6b61] py-1.5 text-[11px] font-semibold text-[#0b6b61] hover:bg-[#0b6b61]/5"
+                    className="mt-2 w-full rounded-md border border-[#111111] py-1.5 text-[11px] font-semibold text-[#111111] hover:bg-[#111111]/5"
                   >
                     按 {focusRadius}km 重新聚合
                   </button>
@@ -520,14 +520,14 @@ export default function ScoutBoard() {
                 <p className="text-[11px] text-muted-foreground">{selected.district_type} · {selected.region}</p>
               </div>
 
-              <div className="mx-4 mt-3 rounded-xl bg-gradient-to-br from-[#0a7468] to-[#119486] p-4 text-white">
-                <div className="mb-1 text-[11px] text-[#d3f0eb]">{THEMES.find((t) => t.key === theme)?.label}</div>
+              <div className="mx-4 mt-3 rounded-xl bg-gradient-to-br from-[#111111] to-[#3f3f46] p-4 text-white">
+                <div className="mb-1 text-[11px] text-neutral-300">{THEMES.find((t) => t.key === theme)?.label}</div>
                 <div className="font-num text-4xl font-black leading-none">
                   {themeInfo(selected, theme, districts).score}
                   <small className="text-sm font-semibold">/100</small>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  <span className="rounded-md bg-[#f1bd42] px-2 py-0.5 text-[10px] font-bold text-[#453000]">
+                  <span className="rounded-md bg-white px-2 py-0.5 text-[10px] font-bold text-[#111111]">
                     全城 #{themeInfo(selected, theme, districts).rank} · {themeInfo(selected, theme, districts).label}
                   </span>
                   <span className="rounded-md bg-white/20 px-2 py-0.5 text-[10px]">{radius / 1000} km Trade area</span>
@@ -537,14 +537,14 @@ export default function ScoutBoard() {
 
               <div className="px-4 py-3">
                 <div className="mb-2 flex items-center gap-2 text-[12px]">
-                  <Save className="h-3.5 w-3.5 text-[#0b6b61]" />
+                  <Save className="h-3.5 w-3.5 text-[#111111]" />
                   <input
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="给候选点加备注…"
-                    className="h-8 flex-1 rounded-md border border-border bg-muted/40 px-2.5 text-xs outline-none focus:border-[#e0a458]"
+                    className="h-8 flex-1 rounded-md border border-border bg-muted/40 px-2.5 text-xs outline-none focus:border-[#111111]"
                   />
-                  <button onClick={saveCandidate} className="rounded-md bg-[#0b6b61] px-3 py-1.5 text-xs font-semibold text-white">加入候选</button>
+                  <button onClick={saveCandidate} className="rounded-md bg-[#111111] px-3 py-1.5 text-xs font-semibold text-white">加入候选</button>
                 </div>
               </div>
 
@@ -552,7 +552,7 @@ export default function ScoutBoard() {
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-[12px] font-semibold">
                     Trade area <span className="text-[10px] font-normal text-muted-foreground">{radius / 1000} km</span>
-                    {ta?.proxy && <span className="ml-1.5 rounded bg-[#6b7280]/25 px-1 py-0.5 text-[9px] font-semibold text-amber-300/90">代理估算</span>}
+                    {ta?.proxy && <span className="ml-1.5 rounded bg-neutral-200/70 px-1 py-0.5 text-[9px] font-semibold text-neutral-600">代理估算</span>}
                   </h3>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">纳入{ta?.sampledDistricts ?? 0}商圈 · 覆盖{Math.round((ta?.coveredRate ?? 0) * 100)}%</span>
                 </div>
@@ -592,7 +592,7 @@ export default function ScoutBoard() {
                         <div className="grid grid-cols-[64px_1fr_26px] items-center gap-2 text-[11px] text-muted-foreground">
                           <span>{lab}</span>
                           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full rounded-full bg-[#0b6b61]" style={{ width: `${pct}%` }} />
+                            <div className="h-full rounded-full bg-[#111111]" style={{ width: `${pct}%` }} />
                           </div>
                           <b className="text-right text-[11px] text-foreground">{pct}</b>
                         </div>
@@ -603,7 +603,7 @@ export default function ScoutBoard() {
                                 className={
                                   meta.status === 'real'
                                     ? 'rounded px-1 font-semibold text-emerald-300'
-                                    : 'rounded bg-[#6b7280]/25 px-1 font-semibold text-amber-300/90'
+                                    : 'rounded bg-neutral-200/70 px-1 font-semibold text-neutral-600'
                                 }
                               >
                                 数据状态：{meta.status === 'real' ? '真实数据' : meta.status === 'proxy' ? '🟡 代理/演示模型' : '演示'}
@@ -636,11 +636,11 @@ export default function ScoutBoard() {
                 <div className="mb-1 text-[11px] font-medium text-muted-foreground">身份 / 到访目的</div>
                 <div className="flex h-3 overflow-hidden rounded-full">
                   {[
-                    ['resident', '#0b6b61'],
-                    ['office', '#6f80d4'],
-                    ['tourist', '#f1bd42'],
-                    ['student', '#119485'],
-                    ['other', '#92919c'],
+                    ['resident', '#111111'],
+                    ['office', '#3f3f46'],
+                    ['tourist', '#9ca3af'],
+                    ['student', '#6b7280'],
+                    ['other', '#d4d4d8'],
                   ].map(([k, c]) => (
                     <div key={k} style={{ width: `${selected.identity[k as keyof typeof selected.identity] || 0}%`, background: c }} />
                   ))}
@@ -661,10 +661,10 @@ export default function ScoutBoard() {
                 <div className="mt-3 mb-1 text-[11px] font-medium text-muted-foreground">年龄结构</div>
                 <div className="flex h-3 overflow-hidden rounded-full">
                   {[
-                    ['a18_24', '#119485'],
-                    ['a25_34', '#0b6b61'],
-                    ['a35_44', '#6f80d4'],
-                    ['a45_plus', '#f1bd42'],
+                    ['a18_24', '#d4d4d8'],
+                    ['a25_34', '#111111'],
+                    ['a35_44', '#6b7280'],
+                    ['a45_plus', '#3f3f46'],
                   ].map(([k, c]) => (
                     <div key={k} style={{ width: `${selected.age[k as keyof typeof selected.age] || 0}%`, background: c }} />
                   ))}
@@ -688,7 +688,7 @@ export default function ScoutBoard() {
                 <div className="grid gap-2">
                   {selected.evidence.map((e, i) => (
                     <div key={i} className="flex gap-2 rounded-lg bg-muted/50 p-2.5 text-[11px] leading-relaxed">
-                      <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-[#119485]" />
+                      <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-[#6b7280]" />
                       {e}
                     </div>
                   ))}
@@ -710,7 +710,7 @@ export default function ScoutBoard() {
                       <div key={ck} className="flex items-start gap-2 text-[11px]">
                         <span
                           className={`mt-0.5 flex h-5 w-14 flex-none items-center justify-center rounded-md text-[9px] font-bold ${
-                            m.status === 'real' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-[#6b7280]/25 text-amber-300/90'
+                            m.status === 'real' ? 'bg-[#111111]/10 text-[#111111]' : 'bg-neutral-200/70 text-neutral-600'
                           }`}
                         >
                           {m.status === 'real' ? 'REAL' : m.status === 'proxy' ? 'PROXY' : 'DEMO'}
@@ -737,14 +737,14 @@ export default function ScoutBoard() {
         <div className="rounded-xl border border-border bg-card px-4 py-2.5">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground">已保存候选点（{candidates.length}）</span>
-            <button onClick={() => exportCsv('candidates')} className="flex items-center gap-1 text-[11px] text-[#0b6b61]">
+            <button onClick={() => exportCsv('candidates')} className="flex items-center gap-1 text-[11px] text-[#111111]">
               <Download className="h-3 w-3" /> 导出 CSV
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
             {candidates.map((c) => (
               <div key={c.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-[11px]">
-                <CupSoda className="h-3.5 w-3.5 text-[#0b6b61]" />
+                <CupSoda className="h-3.5 w-3.5 text-[#111111]" />
                 <span className="font-medium">{c.name}</span>
                 <span className="text-muted-foreground">· {c.note || '无备注'}</span>
                 <button onClick={() => removeCandidate(c.id)} className="text-muted-foreground hover:text-red-400">

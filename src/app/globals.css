@@ -181,11 +181,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 归一画布制图：细格网底 */
+/* 归一画布制图：细格网底（浅色 · 喜茶黑白灰） */
 .gris-canvas {
-  background-color: #101014;
+  background-color: #f7f7f5;
   background-image:
-    linear-gradient(rgba(255, 244, 224, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 244, 224, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
   background-size: 28px 28px;
 }

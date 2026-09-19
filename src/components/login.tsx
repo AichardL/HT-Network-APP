@@ -40,7 +40,7 @@ export function LoginPanel({ onLogin }: { onLogin: (u: { username: string; role:
       <div className="absolute inset-0 gris-canvas opacity-60" />
       <div className="relative w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#e0a458] text-[#17120a]">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#111111] text-white">
             <CupSoda className="h-7 w-7" strokeWidth={1.6} />
           </div>
           <div className="text-center">
